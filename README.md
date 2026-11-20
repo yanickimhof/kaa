@@ -4,6 +4,8 @@
 
 <p align="center"><b>A home network security analyser that runs on your own computer.</b></p>
 
+<p align="center"><a href="https://github.com/yanickimhof/kaa/actions/workflows/ci.yml"><img src="https://github.com/yanickimhof/kaa/actions/workflows/ci.yml/badge.svg" alt="CI"></a> <img src="https://img.shields.io/badge/license-MIT-blue" alt="MIT"> <img src="https://img.shields.io/badge/python-3.11%2B-blue" alt="Python 3.11+"></p>
+
 <p align="center"><img src="docs/img/dashboard-dark.png" width="900" alt="Kaa dashboard"></p>
 
 Kaa maps every device on your home network, recognises what each one is, checks the few things that really matter for security, and turns the result into a short list of actions. Everything is stored locally. Nothing is sent anywhere unless you switch an optional feature on.
@@ -80,7 +82,7 @@ See [SECURITY.md](SECURITY.md) for the security model.
 
 ## Contributing
 
-Issues and pull requests are welcome. New device signatures are the easiest contribution: add a rule to `src/kaa/data/signatures/` with a test. Run the tests with `pip install -e ".[dev]" && pytest`.
+Issues and pull requests are welcome. New device signatures are the easiest contribution. See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 

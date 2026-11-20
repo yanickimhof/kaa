@@ -81,6 +81,7 @@ def test_read_table_falls_back_to_system_python_when_arp_is_empty(monkeypatch):
 
     monkeypatch.setattr(arp, "_run", fake_run)
     monkeypatch.setattr(arp.shutil, "which", lambda c: "/x/" + c)
+    monkeypatch.setattr(arp, "read_sysctl", lambda: [])
     monkeypatch.setattr(arp, "_system_python_available", lambda: True)
     assert [n.ip for n in arp.read_table()] == ["192.168.1.5"]
     assert calls[-1] == "/usr/bin/python3"
