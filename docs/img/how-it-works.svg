@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 250" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Arial, sans-serif">
+<rect width="960" height="250" rx="14" fill="#0f1218"/>
+<defs><marker id="a" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#5b8def"/></marker></defs>
+<g fill="#161b24" stroke="#2a3140">
+<rect x="24" y="58" width="190" height="134" rx="12"/><rect x="262" y="58" width="190" height="134" rx="12"/>
+<rect x="500" y="58" width="190" height="134" rx="12"/><rect x="738" y="58" width="198" height="134" rx="12"/></g>
+<g fill="#e8ecf3" font-size="17" font-weight="600">
+<text x="44" y="92">1 Discover</text><text x="282" y="92">2 Identify</text><text x="520" y="92">3 Evaluate</text><text x="758" y="92">4 Score and alert</text></g>
+<g fill="#9aa4b5" font-size="13">
+<text x="44" y="120">ARP table, UDP sweep</text><text x="44" y="141">mDNS, SSDP, reverse DNS</text><text x="44" y="162">Optional port check</text>
+<text x="282" y="120">Vendor registry (IEEE)</text><text x="282" y="141">Signature rules vote</text><text x="282" y="162">Optional AI proposes</text>
+<text x="520" y="120">Deterministic rules</text><text x="520" y="141">Evidence kept for each</text><text x="520" y="162">Fix step included</text>
+<text x="758" y="120">Score 0 to 100</text><text x="758" y="141">Dashboard and menu bar</text><text x="758" y="162">macOS notifications</text></g>
+<g stroke="#5b8def" stroke-width="2" fill="none"><path d="M216 125H258" marker-end="url(#a)"/><path d="M454 125H496" marker-end="url(#a)"/><path d="M692 125H734" marker-end="url(#a)"/></g>
+<text x="24" y="32" fill="#9aa4b5" font-size="13">Everything runs and stays on your computer (SQLite, loopback web app)</text>
+<text x="24" y="226" fill="#6f7a8c" font-size="12">AI never sets severity. Optional features that contact the Internet are off by default.</text>
+</svg>

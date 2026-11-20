@@ -142,3 +142,52 @@ def test_ui_is_served(world):
     r = c.get("/")
     assert r.status_code == 200 and "Kaa" in r.text
     assert "default-src 'self'" in r.headers["content-security-policy"]
+
+
+def test_self_with_redacted_mac_gets_stable_identity(world, monkeypatch):
+    from kaa.scope import LocalInterface
+    service, _ = world
+    iface = LocalInterface("en0", "192.168.50.99", ipaddress.ip_network("192.168.50.0/24"),
+                           "02:00:00:00:00:00")
+    monkeypatch.setattr(svc, "local_interfaces", lambda: [iface])
+    service.run_cycle()
+    me = [d for d in service.db.list_devices() if d["ip"] == "192.168.50.99"]
+    assert len(me) == 1 and me[0]["mac"] == "self:en0" and not me[0]["randomized"]
+    assert service.state["last_error"] is None
+
+
+def test_legacy_placeholder_row_is_removed_and_self_is_trusted(world, monkeypatch):
+    from kaa.scope import LocalInterface
+    service, _ = world
+    service.db.upsert_device("02:00:00:00:00:00", "192.168.50.99", False)
+    iface = LocalInterface("en0", "192.168.50.99", ipaddress.ip_network("192.168.50.0/24"),
+                           "02:00:00:00:00:00")
+    monkeypatch.setattr(svc, "local_interfaces", lambda: [iface])
+    service.run_cycle()
+    me = [d for d in service.db.list_devices() if d["ip"] == "192.168.50.99"]
+    assert [d["mac"] for d in me] == ["self:en0"]
+    assert me[0]["trust"] == "known"
+    assert not any(f["rule_id"] == "KAA-NEW-DEVICE" and f["device_id"] == me[0]["id"]
+                   for f in service.db.list_findings())
+
+
+def test_existing_self_row_is_upgraded_to_known(world, monkeypatch):
+    from kaa.scope import LocalInterface
+    service, _ = world
+    did, _ = service.db.upsert_device("self:en0", "192.168.50.99", False)
+    assert service.db.get_device(did)["trust"] == "unknown"
+    iface = LocalInterface("en0", "192.168.50.99", ipaddress.ip_network("192.168.50.0/24"),
+                           "02:00:00:00:00:00")
+    monkeypatch.setattr(svc, "local_interfaces", lambda: [iface])
+    service.run_cycle()
+    assert service.db.get_device(did)["trust"] == "known"
+
+
+def test_baseline_is_redone_after_a_blind_first_scan(world):
+    service, state = world
+    full = list(state["v"])
+    state["v"] = []                       # first scan sees nobody but this machine
+    service.run_cycle()
+    state["v"] = full                     # discovery starts working
+    service.run_cycle()
+    assert not any(f["rule_id"] == "KAA-NEW-DEVICE" for f in service.db.list_findings("open"))

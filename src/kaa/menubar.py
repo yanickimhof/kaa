@@ -5,6 +5,9 @@ from __future__ import annotations
 import json
 import urllib.request
 import webbrowser
+from pathlib import Path
+
+from . import icon
 
 
 def _get(url: str) -> dict | None:
@@ -15,13 +18,12 @@ def _get(url: str) -> dict | None:
         return None
 
 
-def glyph(score: int | None) -> str:
-    if score is None:
-        return "⚪"
-    return "🟢" if score >= 90 else "🟡" if score >= 75 else "🟠" if score >= 50 else "🔴"
+def tier(score: int | None) -> str:
+    return "none" if score is None else "ok" if score >= 90 else "warn" if score >= 70 else "crit"
 
 
-def run(base: str) -> None:
+def run(base: str, cache: Path | None = None) -> None:
+    cache = cache or Path.home() / ".kaa" / "icons"
     try:
         import rumps
     except ImportError as exc:
@@ -29,7 +31,8 @@ def run(base: str) -> None:
 
     class KaaMenu(rumps.App):
         def __init__(self) -> None:
-            super().__init__("Kaa", title="Kaa", quit_button=None)
+            super().__init__("Kaa", title=None, quit_button=None)
+            self._shown: str | None = None
             self.status = rumps.MenuItem("Starting…")
             self.menu = [
                 self.status, None,
@@ -53,16 +56,26 @@ def run(base: str) -> None:
             except OSError:
                 rumps.notification("Kaa", "", "Kaa is not running.")
 
+        def show(self, score: int | None) -> None:
+            """Grey ring, coloured dot: green when all is well, orange when something needs a look, red when urgent."""
+            level = tier(score)
+            if level == self._shown:
+                return
+            self._shown = level
+            colors = {"ok": (52, 199, 89), "warn": (255, 159, 10), "crit": (255, 69, 58), "none": None}
+            self.icon = str(icon.ensure(cache, f"dot-{level}", colors[level]))
+            self.template = False
+
         @rumps.timer(30)
         def refresh(self, _):
             data = _get(f"{base}/api/overview")
             if not data:
-                self.title = "Kaa ⚪"
+                self.show(None)
                 self.status.title = "Not running"
                 return
             score = data["score"]["value"]
-            self.title = f"Kaa {glyph(score)} {score}"
-            self.status.title = (f"{data['online']} online, "
+            self.show(score)
+            self.status.title = (f"Score {score}  ·  {data['online']} online  ·  "
                                  f"{data['open_findings']} to review")
 
     KaaMenu().run()

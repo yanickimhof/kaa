@@ -32,7 +32,7 @@ def test_gateway_is_router():
 
 
 def test_hostname_alone_is_weaker_than_agreement():
-    alone, c1, _ = engine.classify(facts(hostname="Yanicks-iPhone"), RULES)
+    alone, c1, _ = engine.classify(facts(hostname="Alexs-iPhone"), RULES)
     assert alone == "phone" and c1 == pytest.approx(0.8)
 
 
@@ -84,3 +84,23 @@ def test_ai_payload_never_contains_identifiers():
     p = llm.payload_for({"vendor": "X", "mac": "aa:bb:cc:dd:ee:ff", "ip": "10.0.0.2",
                          "hostname": "h", "open_ports": []})
     assert set(p) == {"vendor", "hostname"}
+
+
+def test_eero_mesh_node_is_an_access_point_even_with_an_amazon_address():
+    for kw in ({"vendor": "eero inc."},
+               {"vendor": "Amazon Technologies Inc.", "hostname": "eero-living-room"}):
+        cls, conf, _ = engine.classify(facts(**kw), RULES)
+        assert cls == "access_point" and conf >= 0.85
+
+
+def test_netatmo_cameras_are_cameras_not_sensors():
+    from kaa.identify import engine
+    from kaa.identify.engine import load_rules
+    from kaa.service import builtin_signatures
+    rules = load_rules(builtin_signatures(), None)
+    base = {"vendor": "Netatmo", "randomized_mac": False, "mdns_services": ["_hap._tcp"], "open_ports": []}
+    for host in ("Netatmo-Welcome-g97ebbf", "Netatmo-Presence-g95d862"):
+        cls, _, _ = engine.classify({**base, "hostname": host}, rules)
+        assert cls == "camera"
+    cls, _, _ = engine.classify({**base, "hostname": "Weather Station"}, rules)
+    assert cls == "sensor"

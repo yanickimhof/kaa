@@ -1,4 +1,4 @@
-# Architecture (v0.1)
+# Architecture
 
 ```
 collectors ──► service cycle ──► SQLite ──► API ──► web app / menu bar
@@ -19,6 +19,10 @@ collectors ──► service cycle ──► SQLite ──► API ──► web 
    enabled, a local model proposes a class.
 6. **Evaluate**: deterministic rules in `findings.py` produce findings with evidence.
 7. **Score**: 100 minus capped penalties per severity. Acknowledged findings are free.
+
+Around the cycle, small optional workers run: Internet latency every 15 seconds,
+Wi-Fi encryption (read only, macOS), the CISA catalogue, and the Internet exposure
+check. Each is off or local unless you enable it; see the Privacy table in the README.
 
 ## Principles
 

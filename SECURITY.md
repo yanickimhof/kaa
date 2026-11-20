@@ -8,7 +8,7 @@ Kaa is a security tool, so it holds itself to a strict standard.
 |---|---|
 | Read the OS neighbour table, listen for mDNS and SSDP | Touch any address outside the private networks in scope |
 | Open plain TCP connections to a short port list (opt in) | Send exploits, payloads or login attempts |
-| Store everything in one local SQLite file | Send data off the machine, ever, including telemetry |
+| Store everything in one local SQLite file | Send data off the machine without you enabling the feature, and never telemetry |
 | Talk to a local AI endpoint you configure | Use a non loopback AI endpoint unless you set `ai.allow_remote` |
 
 ## Scope guard

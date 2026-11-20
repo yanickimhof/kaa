@@ -83,3 +83,27 @@
   label: Smart TV
   confidence: 0.55
   when: { hostname: { regex: "samsung.*tv|lg.*tv|\\[tv\\]|^tv-|bravia|webos" } }
+
+- id: host-eero
+  class: access_point
+  label: eero mesh node
+  confidence: 0.9
+  when: { hostname: { regex: "eero" } }
+
+- id: host-netatmo-camera
+  class: camera
+  label: Netatmo camera
+  confidence: 0.95
+  when: { hostname: { regex: "^netatmo-(welcome|presence)" } }
+
+- id: host-nuki
+  class: lock
+  label: Nuki smart lock
+  confidence: 0.9
+  when: { hostname: { regex: "nuki" } }
+
+- id: host-appliance
+  class: appliance
+  label: Home appliance
+  confidence: 0.7
+  when: { hostname: { regex: "electrolux|miele|washer|dryer|dishwasher|oven|fridge" } }

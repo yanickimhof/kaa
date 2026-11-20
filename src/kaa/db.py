@@ -44,6 +44,14 @@ create table if not exists events(
   id integer primary key autoincrement,
   ts text not null, kind text not null, device_id integer, message text not null
 );
+create table if not exists speedtests(
+  ts text not null, down real, up real, latency real, jitter real, loss real
+);
+create table if not exists cloud_devices(
+  source text not null, ext_id text not null, name text, kind text, model text, firmware text,
+  battery text, battery_pct integer, reachable integer, parent text, cls text, ts text not null,
+  primary key(source, ext_id)
+);
 create table if not exists scores(
   ts text not null, value integer not null, breakdown text not null
 );
@@ -63,6 +71,9 @@ class Database:
         self.conn.execute("pragma foreign_keys = on")
         self.conn.execute("pragma journal_mode = wal")
         self.conn.executescript(SCHEMA)
+        cols = {r["name"] for r in self.conn.execute("pragma table_info(devices)")}
+        if "critical" not in cols:  # added in 0.1.2
+            self.conn.execute("alter table devices add column critical integer")
         self.conn.commit()
 
     # ---- helpers -------------------------------------------------------
@@ -100,6 +111,21 @@ class Database:
             "values(?,?,?,?,?,?)", (mac, ip, int(randomized), 1, ts, ts))
         return int(cur.lastrowid), True
 
+    def device_online(self, mac: str) -> bool | None:
+        rows = self._q("select online from devices where mac=?", (mac,))
+        return bool(rows[0]["online"]) if rows else None
+
+    def device_ip(self, mac: str) -> str | None:
+        rows = self._q("select ip from devices where mac=?", (mac,))
+        return rows[0]["ip"] if rows else None
+
+    def drop_placeholder_devices(self, macs: Iterable[str]) -> int:
+        """Remove rows created under a placeholder MAC by earlier versions."""
+        n = 0
+        for mac in macs:
+            n += self._x("delete from devices where mac=?", (mac,)).rowcount
+        return n
+
     def mark_offline_except(self, online_ids: set[int]) -> list[int]:
         """Returns ids that just went offline."""
         rows = self._q("select id from devices where online=1")
@@ -109,7 +135,7 @@ class Database:
         return gone
 
     def set_fields(self, device_id: int, **fields: Any) -> None:
-        allowed = {"hostname", "vendor", "label", "trust", "ip"}
+        allowed = {"hostname", "vendor", "label", "trust", "ip", "critical"}
         sets = {k: v for k, v in fields.items() if k in allowed}
         if not sets:
             return
@@ -203,9 +229,47 @@ class Database:
         self._x("insert into events(ts,kind,device_id,message) values(?,?,?,?)",
                 (now(), kind, device_id, message))
 
-    def list_events(self, limit: int = 100) -> list[dict]:
-        return [dict(r) for r in self._q(
-            "select * from events order by id desc limit ?", (limit,))]
+    def list_events(self, limit: int = 100, device_id: int | None = None,
+                    since: str | None = None) -> list[dict]:
+        sql, args = "select * from events where 1=1", []
+        if device_id is not None:
+            sql += " and device_id=?"
+            args.append(device_id)
+        if since:
+            sql += " and ts>=?"
+            args.append(since)
+        return [dict(r) for r in self._q(sql + " order by id desc limit ?", (*args, limit))]
+
+    def score_at_or_before(self, ts: str) -> int | None:
+        rows = self._q("select value from scores where ts<=? order by ts desc limit 1", (ts,))
+        return rows[0]["value"] if rows else None
+
+    def add_speedtest(self, r: dict) -> None:
+        self._x("insert into speedtests(ts,down,up,latency,jitter,loss) values(?,?,?,?,?,?)",
+                (now(), r.get("down"), r.get("up"), r.get("latency"), r.get("jitter"), r.get("loss")))
+
+    def list_speedtests(self, limit: int = 60) -> list[dict]:
+        rows = self._q("select * from speedtests order by ts desc limit ?", (limit,))
+        return [dict(r) for r in reversed(rows)]
+
+    def replace_cloud(self, source: str, records: list[dict]) -> None:
+        ts = now()
+        self._x("delete from cloud_devices where source=?", (source,))
+        for r in records:
+            reach = r.get("reachable")
+            self._x("insert or replace into cloud_devices(source,ext_id,name,kind,model,firmware,battery,"
+                    "battery_pct,reachable,parent,cls,ts) values(?,?,?,?,?,?,?,?,?,?,?,?)",
+                    (source, r["ext_id"], r.get("name"), r.get("kind"), r.get("model"), r.get("firmware"),
+                     r.get("battery"), r.get("battery_pct"), None if reach is None else int(bool(reach)),
+                     r.get("parent"), r.get("cls"), ts))
+
+    def list_cloud(self) -> list[dict]:
+        out = []
+        for r in self._q("select * from cloud_devices order by source, name"):
+            d = dict(r)
+            d["reachable"] = None if d["reachable"] is None else bool(d["reachable"])
+            out.append(d)
+        return out
 
     def add_score(self, value: int, breakdown: dict) -> None:
         self._x("insert into scores(ts,value,breakdown) values(?,?,?)",

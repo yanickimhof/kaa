@@ -52,6 +52,17 @@ class Config:
     ai_endpoint: str = ""  # OpenAI compatible, for example a local mlx_lm.server
     ai_model: str = ""
     ai_allow_remote: bool = False
+    ai_provider: str = "anthropic"  # anthropic (best quality) or openai (any compatible server)
+    ai_key: str = ""
+    notify: bool = True  # desktop notification for new alerts
+    digest_hour: int = 8  # local hour of the daily summary, -1 to disable
+    lang: str = "fr"  # interface, alerts and AI answers: fr or en
+    exposure: bool = False  # opt in: ask Shodan InternetDB what is open on your public IP
+    threats: bool = False  # opt in: download the CISA KEV catalogue once a day
+    threat_keywords: list[str] = field(default_factory=list)
+    quiet_start: str = "22:00"  # no notification from this time...
+    wake_weekday: str = "07:30"  # ...until this time Monday to Friday
+    wake_weekend: str = "09:00"  # ...and this time on Saturday and Sunday
 
     @property
     def db_path(self) -> Path:
@@ -76,6 +87,9 @@ def load(home: Path | None = None) -> Config:
         srv = raw.get("server", {})
         scan = raw.get("scan", {})
         ai = raw.get("ai", {})
+        nt = raw.get("notify", {})
+        th = raw.get("threats", {})
+        cfg.lang = raw.get("ui", {}).get("lang", cfg.lang) if raw.get("ui", {}).get("lang") in ("fr", "en") else cfg.lang
         cfg.host = srv.get("host", cfg.host)
         cfg.port = int(srv.get("port", cfg.port))
         cfg.interval = int(scan.get("interval", cfg.interval))
@@ -91,6 +105,26 @@ def load(home: Path | None = None) -> Config:
         cfg.ai_endpoint = str(ai.get("endpoint", cfg.ai_endpoint))
         cfg.ai_model = str(ai.get("model", cfg.ai_model))
         cfg.ai_allow_remote = bool(ai.get("allow_remote", cfg.ai_allow_remote))
+        cfg.ai_provider = str(ai.get("provider", cfg.ai_provider))
+        cfg.ai_key = (os.environ.get("KAA_AI_KEY") or os.environ.get("ANTHROPIC_API_KEY")
+                      or str(ai.get("key", "")))
+        for keyfile in (cfg.home / "ai.key", Path.home() / ".kaa" / "ai.key"):
+            if not cfg.ai_key and keyfile.exists():
+                cfg.ai_key = keyfile.read_text(encoding="utf-8").strip()
+        if cfg.ai_key and "enabled" not in ai:  # a key present means: use the AI
+            cfg.ai_enabled = True
+        if cfg.ai_provider == "anthropic":
+            cfg.ai_endpoint = cfg.ai_endpoint or "https://api.anthropic.com/v1"
+            cfg.ai_model = cfg.ai_model or "claude-haiku-5-5"
+            cfg.ai_allow_remote = True
+        cfg.notify = bool(nt.get("enabled", cfg.notify))
+        cfg.digest_hour = int(nt.get("digest_hour", cfg.digest_hour))
+        cfg.threats = bool(th.get("enabled", cfg.threats))
+        cfg.exposure = bool(raw.get("exposure", {}).get("enabled", cfg.exposure))
+        cfg.threat_keywords = [str(x).lower() for x in th.get("keywords", cfg.threat_keywords)]
+        cfg.quiet_start = str(nt.get("quiet_start", cfg.quiet_start))
+        cfg.wake_weekday = str(nt.get("wake_weekday", cfg.wake_weekday))
+        cfg.wake_weekend = str(nt.get("wake_weekend", cfg.wake_weekend))
     if cfg.host not in LOOPBACK_HOSTS:
         raise ValueError(
             f"server.host={cfg.host!r} refused: Kaa only listens on loopback."

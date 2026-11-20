@@ -20,3 +20,17 @@ def test_service_refuses_off_macos(env, monkeypatch, capsys):
     monkeypatch.setattr(launchd.sys, "platform", "linux")
     assert main(["service", "install"]) == 1
     assert "macOS only" in capsys.readouterr().err
+
+
+def test_menubar_agent_is_interactive_and_targets_the_service_port(env):
+    cfg, _db, _s = env
+    data = launchd.build_menubar_plist(cfg, python="/venv/bin/python")
+    assert data["Label"] == launchd.MENU_LABEL != launchd.LABEL
+    assert data["ProgramArguments"][-3:] == ["menubar", "--port", str(cfg.port)]
+    assert data["ProcessType"] == "Interactive"
+
+
+def test_web_assets_are_in_the_package():
+    from kaa.api import WEB
+    for name in ("index.html", "app.js", "app.css", "logo.svg"):
+        assert (WEB / name).is_file()

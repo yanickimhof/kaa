@@ -101,6 +101,14 @@ def cmd_update_data(_args: argparse.Namespace) -> int:
     cfg = config_mod.load()
     size = oui.download(cfg.data_dir / "oui.csv")
     print(f"IEEE registry updated ({size // 1024} KiB).")
+    if cfg.threats:
+        from . import threats
+
+        try:
+            print(f"Threat catalogue updated ({threats.download(cfg.data_dir / 'kev.json') // 1024} KiB).")
+        except Exception as exc:  # noqa: BLE001
+            print(f"Threat catalogue not updated: {exc}", file=sys.stderr)
+            return 1
     return 0
 
 
@@ -117,8 +125,42 @@ def cmd_doctor(_args: argparse.Namespace) -> int:
     except ScopeError as exc:
         print(f"Scope       : PROBLEM, {exc}")
         return 1
+    from .collectors import arp
+
+    print(f"ARP table   : {len(arp.read_table())} neighbours known to the OS")
+    if cfg.sweep:
+        probe = arp.sweep(scope, settle=0.2, limit=24)
+        errs = probe["errors"]
+        print(f"Local probe : {probe['contacted']} packets sent, "
+              f"{'errors ' + str(errs) if errs else 'no errors'}")
+        if any(e in errs for e in ("EPERM", "EACCES")):
+            print("              macOS seems to block Local Network access for this process.\n"
+                  "              Check System Settings > Privacy & Security > Local Network.")
+        elif "EHOSTUNREACH" in errs or "EHOSTDOWN" in errs:
+            print("              (unreachable hosts are normal for addresses nobody uses)")
+    url = f"http://{cfg.host}:{cfg.port}"
+    try:
+        with urllib.request.urlopen(url + "/api/overview", timeout=2) as r:  # noqa: S310
+            o = json.loads(r.read())
+        st = o["state"]
+        print(f"Service     : running, {o['devices']} devices, score {o['score']['value']}, "
+              f"last cycle {st['last_run']} ({st['last_duration']}s)")
+        print(f"              neighbours={st.get('neighbours')} sweep={st.get('sweep')}")
+        if st["last_error"]:
+            print(f"              LAST ERROR: {st['last_error']}")
+    except (OSError, ValueError):
+        print("Service     : not running")
+    from . import macos
+    from .collectors import arp as _arp
+    if sys.platform == "darwin":
+        print("Interpreter : " + ("NO IDENTITY, macOS hides your devices; run `kaa service install`"
+                                  if macos.needs_identity() else "ok"))
+    print("ARP methods : " + ", ".join(f"{k}={v}" for k, v in _arp.methods().items()))
+    from .api import WEB
+    print(f"Web UI      : {'ok' if (WEB / 'index.html').is_file() else 'MISSING index.html (reinstall)'}")
+    print(f"Threat watch: {'on' if cfg.threats else 'off (opt in from Settings)'}")
     print(f"Port scan   : {'on' if cfg.portscan else 'off (opt in with `kaa scan --ports`)'}")
-    print(f"AI resolver : {'on, ' + cfg.ai_endpoint if cfg.ai_enabled else 'off'}")
+    print(f"AI          : {'on, ' + cfg.ai_provider + ' ' + cfg.ai_model if cfg.ai_enabled else 'off (put your key in ~/.kaa/ai.key)'}")
     return 0
 
 
@@ -134,11 +176,11 @@ def cmd_service(args: argparse.Namespace) -> int:
     return 0 if ok else 1
 
 
-def cmd_menubar(_args: argparse.Namespace) -> int:
+def cmd_menubar(args: argparse.Namespace) -> int:
     from .menubar import run
 
     cfg = config_mod.load()
-    run(f"http://{cfg.host}:{cfg.port}")
+    run(f"http://{cfg.host}:{args.port or cfg.port}")
     return 0
 
 
@@ -162,7 +204,9 @@ def main(argv: list[str] | None = None) -> int:
     s = sub.add_parser("service", help="run Kaa in the background (macOS)")
     s.add_argument("action", choices=["install", "uninstall", "status"])
     s.set_defaults(fn=cmd_service)
-    sub.add_parser("menubar", help="macOS menu bar item").set_defaults(fn=cmd_menubar)
+    s = sub.add_parser("menubar", help="macOS menu bar item")
+    s.add_argument("--port", type=int, help="port of the running Kaa service")
+    s.set_defaults(fn=cmd_menubar)
 
     args = p.parse_args(argv)
     return args.fn(args)

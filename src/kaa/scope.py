@@ -11,7 +11,10 @@ import socket
 from dataclasses import dataclass
 from typing import Iterator
 
-import psutil
+try:  # optional here so that diagnostics can run under any Python
+    import psutil
+except ImportError:  # pragma: no cover
+    psutil = None  # type: ignore[assignment]
 
 SKIP_IFACE_PREFIXES = (
     "lo", "utun", "awdl", "llw", "gif", "stf", "anpi", "ap", "bridge",

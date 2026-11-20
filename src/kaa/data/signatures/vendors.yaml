@@ -96,3 +96,21 @@
   label: Amazon device
   confidence: 0.45
   when: { vendor: { contains: amazon } }
+
+- id: vendor-eero
+  class: access_point
+  label: eero mesh node
+  confidence: 0.9
+  when: { vendor: { contains: eero } }
+
+- id: vendor-nuki
+  class: lock
+  label: Nuki smart lock
+  confidence: 0.9
+  when: { vendor: { contains: nuki } }
+
+- id: vendor-appliance-makers
+  class: appliance
+  label: Home appliance maker
+  confidence: 0.7
+  when: { vendor: { regex: "electrolux|miele|v-zug|aeg|whirlpool|bsh|liebherr|arcelik|beko" } }

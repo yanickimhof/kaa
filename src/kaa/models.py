@@ -9,7 +9,7 @@ CLASSES = (
     "router", "access_point", "computer", "phone", "tablet", "tv", "media",
     "speaker", "camera", "printer", "nas", "game_console", "sensor",
     "plug", "light", "thermostat", "car", "hub", "server", "wearable",
-    "iot", "unknown",
+    "iot", "lock", "appliance", "unknown",
 )
 
 TRUST_LEVELS = ("unknown", "known", "guest")

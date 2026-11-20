@@ -46,3 +46,57 @@ def test_ssdp_parse():
             b"ST: urn:schemas-upnp-org:device:InternetGatewayDevice:1\r\nLOCATION: http://x/\r\n\r\n")
     h = ssdp.parse_response(data)
     assert h["server"].startswith("Linux") and "InternetGatewayDevice" in h["st"]
+
+
+def test_valid_mac_rejects_placeholders():
+    from kaa.oui import valid_mac
+    assert valid_mac("a4:83:e7:aa:bb:cc") and valid_mac("0:1a:2b:3:4:5")
+    for bad in (None, "", "02:00:00:00:00:00", "00:00:00:00:00:00", "self:en0", "a4:83"):
+        assert not valid_mac(bad)
+
+
+def test_sweep_counts_errors_by_name(monkeypatch):
+    import errno, ipaddress
+    from kaa.collectors import arp
+    from kaa.scope import Scope
+
+    class Sock:
+        def setblocking(self, _): pass
+        def close(self): pass
+        def sendto(self, *_):
+            raise OSError(errno.EHOSTUNREACH, "No route to host")
+
+    monkeypatch.setattr(arp.socket, "socket", lambda *a, **k: Sock())
+    scope = Scope([ipaddress.ip_network("192.168.7.0/24")], set(), set(), 1024)
+    out = arp.sweep(scope, settle=0, limit=10)
+    assert out == {"contacted": 10, "errors": {"EHOSTUNREACH": 10}}
+
+
+def test_read_table_falls_back_to_system_python_when_arp_is_empty(monkeypatch):
+    calls = []
+
+    def fake_run(cmd):
+        calls.append(cmd[0])
+        return "? (192.168.1.5) at aa:bb:cc:dd:ee:01 on en0 [ethernet]" if cmd[0] == "/usr/bin/python3" else ""
+
+    monkeypatch.setattr(arp, "_run", fake_run)
+    monkeypatch.setattr(arp.shutil, "which", lambda c: "/x/" + c)
+    monkeypatch.setattr(arp, "_system_python_available", lambda: True)
+    assert [n.ip for n in arp.read_table()] == ["192.168.1.5"]
+    assert calls[-1] == "/usr/bin/python3"
+
+
+def _route_msg(ip: str, mac: bytes) -> bytes:
+    import socket, struct
+    dst = struct.pack("<BBH4s8x", 16, socket.AF_INET, 0, socket.inet_aton(ip))
+    gw = struct.pack("<BBHBBBB", 20, 18, 4, 6, 0, 6, 0) + mac + bytes(6)  # sockaddr_dl
+    body = dst + gw
+    hdr = struct.pack("<HBBHxxiiiiiii", 92 + len(body), 5, 0x14, 4, 0x400, 3, 0, 0, 0, 0, 0)
+    return hdr + bytes(92 - len(hdr)) + body
+
+
+def test_route_dump_parser_decodes_neighbours():
+    data = _route_msg("192.168.4.1", bytes.fromhex("74b6b69f51cd")) + \
+        _route_msg("192.168.4.23", bytes.fromhex("70ee5091 04e0".replace(" ", "")))
+    got = {n.ip: n.mac for n in arp._parse_route_dump(data)}
+    assert got == {"192.168.4.1": "74:b6:b6:9f:51:cd", "192.168.4.23": "70:ee:50:91:04:e0"}

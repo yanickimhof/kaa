@@ -1,40 +1,41 @@
-"""Deterministic findings. Severity is decided here, never by the AI layer."""
+"""Deterministic findings. Severity is decided here, never by the AI layer.
+
+Wording lives in ``texts.py`` (English and French); this module decides *what* is wrong.
+"""
 
 from __future__ import annotations
 
 from typing import Any
 
+from . import texts
+from .exposure import RISKY as exposure_risky
 from .models import FindingSpec
 
-PORT_RULES: dict[int, tuple[str, str, str, str, str]] = {
-    23: ("KAA-PORT-TELNET", "high", "Telnet is open",
-         "Telnet sends logins in clear text and is a classic entry point for IoT malware.",
-         "Turn Telnet off in the device settings. Use SSH if remote access is needed."),
-    21: ("KAA-PORT-FTP", "medium", "FTP is open",
-         "FTP transmits credentials and files without encryption.",
-         "Disable FTP or replace it with SFTP. Restrict access to trusted devices."),
-    3389: ("KAA-PORT-RDP", "high", "Remote Desktop (RDP) is open",
-           "RDP is heavily targeted by brute force and exploits.",
-           "Disable RDP if unused. Otherwise require network level authentication and a VPN."),
-    5900: ("KAA-PORT-VNC", "medium", "VNC screen sharing is open",
-           "VNC is often protected by a weak password and has no encryption by default.",
-           "Turn off screen sharing if unused, or set a strong password and tunnel it."),
-    554: ("KAA-PORT-RTSP", "low", "Video stream port (RTSP) is open",
-          "Cameras exposing RTSP sometimes serve their stream without a password.",
-          "Check that the stream asks for credentials and that the camera has no default password."),
-    1883: ("KAA-PORT-MQTT", "low", "MQTT broker without TLS is reachable",
-           "Plain MQTT carries data and commands in clear text, sometimes with no login.",
-           "Require authentication and move to MQTT over TLS (port 8883)."),
+# open port -> (rule id, severity)
+PORT_RULES: dict[int, tuple[str, str]] = {
+    23: ("KAA-PORT-TELNET", "high"), 21: ("KAA-PORT-FTP", "medium"),
+    3389: ("KAA-PORT-RDP", "high"), 5900: ("KAA-PORT-VNC", "medium"),
+    554: ("KAA-PORT-RTSP", "low"), 1883: ("KAA-PORT-MQTT", "low"),
 }
+IOT_CLASSES = {"camera", "lock", "appliance", "iot", "plug", "light", "sensor", "thermostat", "hub", "car"}
+PEOPLE_CLASSES = {"computer", "phone", "tablet", "wearable"}
+WEAK_WIFI = {"open", "wep", "wpa"}
+FLAP_DROPS = 4              # disconnections within one hour
+CRITICAL_OFFLINE_MIN = 15   # minutes before a critical device is reported missing
 
 
 def _facts(d: dict) -> dict[str, Any]:
     return d.get("facts", {})
 
 
+def _spec(did: int | None, rule: str, severity: str, name: str, evidence: dict) -> FindingSpec:
+    title, detail, fix = texts.render("en", rule, name, evidence)  # type: ignore[misc]
+    return FindingSpec(did, rule, severity, title, detail, fix, evidence)
+
+
 def evaluate(devices: list[dict], ctx: dict[str, Any]) -> list[FindingSpec]:
     """``devices`` carry a ``facts`` dict. ``ctx`` keys: baseline_at, scanned_ids,
-    gateway_alert."""
+    gateway_alert, flaps, offline_min."""
     specs: list[FindingSpec] = []
     baseline = ctx.get("baseline_at")
     scanned: set[int] = set(ctx.get("scanned_ids", ()))
@@ -45,62 +46,85 @@ def evaluate(devices: list[dict], ctx: dict[str, Any]) -> list[FindingSpec]:
         did = d["id"]
 
         if baseline and d["first_seen"] > baseline and d["trust"] == "unknown":
-            specs.append(FindingSpec(
-                did, "KAA-NEW-DEVICE", "medium", f"New device joined: {name}",
-                "A device that was not present at the first scan appeared on your network.",
-                "If you recognise it, mark it Known. If not, change your Wi-Fi password "
-                "and review your router's client list.",
-                {"mac": d["mac"], "ip": d["ip"], "first_seen": d["first_seen"]}))
+            specs.append(_spec(did, "KAA-NEW-DEVICE", "medium", name,
+                               {"mac": d["mac"], "ip": d["ip"], "first_seen": d["first_seen"]}))
+
+        drops = int(ctx.get("flaps", {}).get(did, 0))
+        if drops >= FLAP_DROPS and d["trust"] != "guest":
+            specs.append(_spec(did, "KAA-FLAPPING", "low", name, {"drops_last_hour": drops}))
+
+        minutes = ctx.get("offline_min", {}).get(did)
+        if d.get("critical") == 1 and minutes is not None and minutes >= CRITICAL_OFFLINE_MIN:
+            specs.append(_spec(did, "KAA-CRITICAL-OFFLINE", "high", name, {"minutes": int(minutes)}))
 
         if d["randomized"] and d["trust"] == "unknown":
-            specs.append(FindingSpec(
-                did, "KAA-RANDOM-MAC", "info", f"Private Wi-Fi address: {name}",
-                "This device uses a randomised MAC address, a privacy feature of modern "
-                "phones and laptops. It cannot be recognised by vendor.",
-                "Mark it Known once you have identified the owner.",
-                {"mac": d["mac"]}))
+            specs.append(_spec(did, "KAA-RANDOM-MAC", "info", name, {"mac": d["mac"]}))
 
         if d["class"] == "unknown" and d["trust"] == "unknown" and not d["randomized"]:
-            specs.append(FindingSpec(
-                did, "KAA-UNIDENTIFIED", "low", f"Unidentified device: {name}",
-                "Kaa could not tell what this device is from its vendor and services.",
-                "Check the IP in your router, then label it so it is tracked from now on.",
-                {"mac": d["mac"], "vendor": d.get("vendor")}))
+            specs.append(_spec(did, "KAA-UNIDENTIFIED", "low", name,
+                               {"mac": d["mac"], "vendor": d.get("vendor")}))
 
         if did in scanned:
             ports = set(f.get("open_ports", []))
-            for port, (rid, sev, title, detail, fix) in PORT_RULES.items():
+            for port, (rid, sev) in PORT_RULES.items():
                 if port in ports:
-                    specs.append(FindingSpec(
-                        did, rid, sev, f"{title} on {name}", detail, fix,
-                        {"port": port, "open_ports": sorted(ports),
-                         "method": "tcp connect"}))
+                    specs.append(_spec(did, rid, sev, name, {
+                        "port": port, "open_ports": sorted(ports), "method": "tcp connect"}))
             if f.get("is_gateway") and 80 in ports and 443 not in ports:
-                specs.append(FindingSpec(
-                    did, "KAA-GW-HTTP", "low", "Router admin page has no HTTPS",
-                    "The gateway serves its admin interface over plain HTTP only.",
-                    "Enable HTTPS for the admin interface if your router supports it.",
-                    {"open_ports": sorted(ports)}))
+                specs.append(_spec(did, "KAA-GW-HTTP", "low", name, {"open_ports": sorted(ports)}))
+            if d["class"] == "lock" and ports:
+                specs.append(_spec(did, "KAA-LOCK-EXPOSED", "high", name,
+                                   {"open_ports": sorted(ports)}))
+            if d["class"] == "camera" and 80 in ports and 443 not in ports:
+                specs.append(_spec(did, "KAA-CAMERA-HTTP", "medium", name,
+                                   {"open_ports": sorted(ports)}))
+            if f.get("probe_tls_expired"):
+                specs.append(_spec(did, "KAA-TLS-EXPIRED", "medium", name,
+                                   {"expired": str(f["probe_tls_expired"])}))
+            if f.get("probe_ftp_anon"):
+                specs.append(_spec(did, "KAA-FTP-ANON", "high", name, {"port": 21}))
 
-        if f.get("is_gateway") and any("InternetGatewayDevice" in s
-                                       for s in f.get("ssdp_st", [])):
-            specs.append(FindingSpec(
-                did, "KAA-UPNP-IGD", "medium", "UPnP is enabled on your router",
-                "UPnP lets any device on the network open ports to the Internet "
-                "without asking you.",
-                "Disable UPnP in the router settings, then forward ports manually "
-                "only if something breaks.",
-                {"ssdp_st": [s for s in f.get("ssdp_st", []) if "Gateway" in s],
-                 "server": f.get("ssdp_server")}))
+        if f.get("is_gateway") and any("InternetGatewayDevice" in s for s in f.get("ssdp_st", [])):
+            specs.append(_spec(did, "KAA-UPNP-IGD", "medium", name, {
+                "ssdp_st": [s for s in f.get("ssdp_st", []) if "Gateway" in s],
+                "server": f.get("ssdp_server")}))
+
+    iot = [d for d in devices if d["class"] in IOT_CLASSES and d["trust"] != "guest"]
+    people = [d for d in devices if d["class"] in PEOPLE_CLASSES and d["trust"] != "guest"]
+    if len(iot) >= 3 and people:
+        names = ", ".join(sorted({(d.get("label") or d.get("hostname") or d["mac"]) for d in iot})[:5])
+        specs.append(_spec(None, "KAA-NO-SEGMENTATION", "low", "",
+                           {"iot": len(iot), "people": len(people), "names": names}))
+
+    wifi = ctx.get("wifi") or {}
+    if wifi.get("mode") in WEAK_WIFI:
+        specs.append(_spec(None, "KAA-WIFI-WEAK", "high", "", {"mode": wifi.get("label") or wifi["mode"]}))
+
+    by_id = {d["id"]: d for d in devices}
+    for did, k in (ctx.get("kev") or {}).items():
+        d = by_id.get(did)
+        if d:
+            name = d.get("label") or d.get("hostname") or d.get("vendor") or d["mac"]
+            specs.append(_spec(did, "KAA-KEV-MODEL", "high" if k.get("ransomware") else "medium", name, k))
+
+    ex = ctx.get("exposure") or {}
+    if ex.get("ports"):
+        risky = [p for p in ex["ports"] if p in exposure_risky]
+        specs.append(_spec(None, "KAA-EXPOSED-PORTS", "high" if risky else "medium", "",
+                           {"ports": ", ".join(str(p) for p in ex["ports"]), "count": len(ex["ports"])}))
+    if ex.get("vulns"):
+        specs.append(_spec(None, "KAA-EXPOSED-VULNS", "high", "",
+                           {"cves": ", ".join(ex["vulns"][:5]), "count": len(ex["vulns"])}))
+
+    cloud = ctx.get("cloud") or []
+    low = sorted({c["name"] or c["kind"] for c in cloud if c.get("battery") == "low"})
+    if low:
+        specs.append(_spec(None, "KAA-CLOUD-BATTERY", "low", "", {"names": ", ".join(low), "count": len(low)}))
+    gone = sorted({c["name"] or c["kind"] for c in cloud if c.get("reachable") is False})
+    if gone:
+        specs.append(_spec(None, "KAA-CLOUD-OFFLINE", "low", "", {"names": ", ".join(gone), "count": len(gone)}))
 
     alert = ctx.get("gateway_alert")
     if alert:
-        gid = alert.get("device_id")
-        specs.append(FindingSpec(
-            gid, "KAA-GATEWAY-MAC-CHANGED", "high", "Your router's hardware address changed",
-            "The device answering as your gateway now has a different MAC address. "
-            "This happens when the router is replaced, and in ARP spoofing attacks.",
-            "If you did not swap your router, treat this as an attack: disconnect "
-            "unknown devices and check the router. If you did, acknowledge to accept.",
-            alert))
+        specs.append(_spec(alert.get("device_id"), "KAA-GATEWAY-MAC-CHANGED", "high", "", alert))
     return specs

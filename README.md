@@ -2,38 +2,54 @@
 
 <h1 align="center">Kaa</h1>
 
-<p align="center"><b>Your network. Your machine. Your data.</b></p>
+<p align="center"><b>A home network security analyser that runs on your own computer.</b></p>
 
-Kaa watches your home network and tells you when something is wrong. It maps every device, recognises what each one is, and turns what it sees into a short list of things you can actually fix.
+<p align="center"><img src="docs/img/dashboard-dark.png" width="900" alt="Kaa dashboard"></p>
 
-It is **sovereign**: everything runs on your computer, nothing is sent anywhere, and the AI that helps explain what it finds runs locally too.
+Kaa maps every device on your home network, recognises what each one is, checks the few things that really matter for security, and turns the result into a short list of actions. Everything is stored locally. Nothing is sent anywhere unless you switch an optional feature on.
+
+## Features
+
+| | |
+|---|---|
+| **Device map** | Every device with its type, vendor and name, found by passive discovery (ARP, mDNS, SSDP). Each identification shows the evidence behind it, and you can correct it: Kaa learns from your corrections. Radio devices read from the Tado and Netatmo clouds (opt in) appear alongside, with battery and signal. |
+| **Security checks** | A compact checklist: Wi-Fi encryption, UPnP on the router, risky open ports, Internet exposure, network separation, devices to review, router identity, known exploited flaws. Each line is green, orange, acknowledged or not checked, and tells you what to do. |
+| **Health score** | One number from 0 to 100 with its history. Deterministic: severity never comes from an AI. |
+| **Alerts** | New unknown device, router hardware address change (the signature of a man-in-the-middle attack), a critical device going offline, weak Wi-Fi, exposed services. macOS notifications respect quiet hours. |
+| **Known exploited flaws** | Matches your vendors and, when known, your exact models against the CISA KEV catalogue. Model level matches are shown first. |
+| **Internet** | Live latency, download and upload trends compared with your usual values, and what your connection currently supports (4K, video calls, gaming, cloud backups). |
+| **Presence** | For each device, seven days of presence hour by hour. |
+| **AI analyst** | Optional. Ask questions about your network, get a briefing, or sort known exploited flaws by relevance. The model never receives MAC or IP addresses and never decides severity. |
+| **Menu bar and service** | On macOS, a menu bar icon with a coloured status dot, and a background service that starts at login. |
+
+<p align="center"><img src="docs/img/device-drawer.png" width="900" alt="Device detail with presence history and classification evidence"></p>
+
+Light and dark themes follow your system. The interface is available in English and French.
+
+## How it works
+
+<p align="center"><img src="docs/img/how-it-works.svg" width="900" alt="Discovery, identification, evaluation and scoring pipeline"></p>
+
+1. **Discover.** A gentle sweep of your private network, then the operating system neighbour table.
+2. **Identify.** Signature rules (YAML, easy to extend) vote on a device class. Agreeing rules reinforce each other. An optional model only proposes a type when no rule matches.
+3. **Evaluate.** Deterministic rules in `findings.py` produce findings, each with its evidence and a fix.
+4. **Score and alert.** Acknowledged findings are free. Changes you need to know about become notifications.
+
+More detail in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ## Install
 
 ```bash
 pipx install git+https://github.com/yanickimhof/kaa
-kaa update-data   # downloads the public vendor registry, once
-kaa serve --open
+kaa update-data    # downloads the public vendor registry, once
+kaa serve --open   # http://127.0.0.1:8473
 ```
 
-Kaa needs Python 3.11 or later. No `pipx`? Install [uv](https://docs.astral.sh/uv/) (`brew install uv`) and use `uv tool install git+https://github.com/yanickimhof/kaa` instead; it fetches a suitable Python by itself. On a Mac, add the menu bar item with `pipx install "kaa[menubar] @ git+https://github.com/yanickimhof/kaa"` and run `kaa menubar`.
+Kaa needs Python 3.11 or later. Without `pipx`, install [uv](https://docs.astral.sh/uv/) and use `uv tool install git+https://github.com/yanickimhof/kaa`.
 
-## What you get
+On macOS, keep it running from login with `kaa service install`. This also starts the menu bar icon.
 
-**A live map of every device** on your network, with its type, vendor and name, and what changed since yesterday.
-
-**A health score you can act on.** Each issue comes with the evidence behind it and the exact step that fixes it.
-
-**Alerts that matter.** A new device you did not approve. Your router's hardware address changing, the signature of a man-in-the-middle attack. UPnP quietly opening your router to the Internet. Telnet, FTP or Remote Desktop left on.
-
-**AI that explains, never decides.** An optional local model can name devices that signatures cannot. It only proposes a type, its answers are limited to a fixed list, and it never sets how serious a problem is.
-
-## Safe by design
-
-- Listens on your computer only, and checks every request against a local token.
-- Scans only private networks you own. Public addresses are refused before anything is sent.
-- Passive and gentle by default. The port check is opt in (`Deep check`).
-- No exploitation, no password guessing, no telemetry.
+Try the interface without scanning anything: `python scripts/demo.py` serves synthetic data on port 8480.
 
 ## Commands
 
@@ -43,11 +59,29 @@ Kaa needs Python 3.11 or later. No `pipx`? Install [uv](https://docs.astral.sh/u
 | `kaa scan [--ports]` | one scan from the terminal |
 | `kaa devices` | list what Kaa knows |
 | `kaa doctor` | check setup and scope |
-| `kaa service install` | keep Kaa running in the background, from login (macOS) |
+| `kaa service install` | run in the background from login (macOS) |
 | `kaa menubar` | macOS menu bar item |
 
-Configuration lives in `config.toml` inside Kaa's data folder (`kaa doctor` prints the path). See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for how it works and [SECURITY.md](SECURITY.md) for the security model.
+Settings live in the web app (gear icon) and in `config.toml` inside Kaa's data folder, which `kaa doctor` prints.
+
+## Privacy
+
+Kaa listens on `127.0.0.1` only and scans only private networks. By default it makes two kinds of outbound connection: a one-off download of the IEEE vendor registry, and a small TCP connection to a public resolver (1.1.1.1, falling back to 9.9.9.9) every 15 seconds to measure Internet latency. Nothing is sent over them. Everything else is opt in:
+
+| Feature | Contacts | Sends |
+|---|---|---|
+| Known exploited flaws | CISA | nothing (downloads the public catalogue) |
+| Speed test | Cloudflare | test traffic |
+| Internet exposure check | Cloudflare, Shodan InternetDB | your public IP address only |
+| Tado and Netatmo | their cloud APIs | your own sign in, read only |
+| AI analyst | the endpoint you configure | coarse device facts, no MAC or IP |
+
+See [SECURITY.md](SECURITY.md) for the security model.
+
+## Contributing
+
+Issues and pull requests are welcome. New device signatures are the easiest contribution: add a rule to `src/kaa/data/signatures/` with a test. Run the tests with `pip install -e ".[dev]" && pytest`.
 
 ## License
 
-MIT
+[MIT](LICENSE)

@@ -16,10 +16,10 @@ dependencies = [
   "psutil>=5.9",
   "zeroconf>=0.130",
   "truststore>=0.9",
+  "rumps>=0.4; sys_platform == 'darwin'",
 ]
 
 [project.optional-dependencies]
-menubar = ["rumps>=0.4; sys_platform == 'darwin'"]
 dev = ["pytest>=8", "httpx>=0.27"]
 
 [project.scripts]
@@ -27,6 +27,8 @@ kaa = "kaa.cli:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/kaa"]
+# Ship the web UI and signature data even if a global gitignore would hide them.
+artifacts = ["src/kaa/web/*", "src/kaa/data/**"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

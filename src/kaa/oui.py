@@ -19,6 +19,20 @@ def normalize_mac(mac: str) -> str:
     return ":".join(p.zfill(2) for p in parts)
 
 
+REDACTED_MACS = {"00:00:00:00:00:00", "02:00:00:00:00:00"}
+
+
+def valid_mac(mac: str | None) -> bool:
+    """False for missing, malformed or placeholder addresses (macOS can hide the
+    real hardware address from background processes and report 02:00:00:00:00:00)."""
+    if not mac:
+        return False
+    parts = mac.replace("-", ":").lower().split(":")
+    if len(parts) != 6 or not all(len(p) <= 2 and p and all(c in "0123456789abcdef" for c in p) for p in parts):
+        return False
+    return normalize_mac(mac) not in REDACTED_MACS
+
+
 def is_randomized(mac: str) -> bool:
     """Locally administered bit set: phones and laptops rotating their MAC."""
     return bool(int(normalize_mac(mac).split(":")[0], 16) & 0x02)
