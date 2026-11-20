@@ -70,6 +70,7 @@ class Database:
         self.conn.row_factory = sqlite3.Row
         self.conn.execute("pragma foreign_keys = on")
         self.conn.execute("pragma journal_mode = wal")
+        self.conn.execute("pragma journal_size_limit = 4194304")
         self.conn.executescript(SCHEMA)
         cols = {r["name"] for r in self.conn.execute("pragma table_info(devices)")}
         if "critical" not in cols:  # added in 0.1.2
@@ -269,6 +270,16 @@ class Database:
             d = dict(r)
             d["reachable"] = None if d["reachable"] is None else bool(d["reachable"])
             out.append(d)
+        return out
+
+    def prune(self, now_ts: str | None = None) -> dict[str, int]:
+        """Keep 90 days of events and scores and a year of speed tests; the inventory is never touched."""
+        from datetime import datetime, timedelta, timezone
+        ref = datetime.fromisoformat(now_ts) if now_ts else datetime.now(timezone.utc)
+        cut = lambda days: (ref - timedelta(days=days)).replace(microsecond=0).isoformat()  # noqa: E731
+        out = {"events": self._x("delete from events where ts<?", (cut(90),)).rowcount,
+               "scores": self._x("delete from scores where ts<?", (cut(90),)).rowcount,
+               "speedtests": self._x("delete from speedtests where ts<?", (cut(365),)).rowcount}
         return out
 
     def add_score(self, value: int, breakdown: dict) -> None:

@@ -169,9 +169,14 @@ function initTheme() {
 const aiOn = () => !!(cfg && cfg.ai && cfg.ai.enabled);
 
 /* ---------- overview ---------- */
+const cov = { active: null, total: null, accepted: 0 };
+function paintCover() {
+  $("cover").textContent = [cov.total ? t("cover_checks", { a: cov.active, b: cov.total }) : "", cov.accepted ? t("cover_accepted", { n: cov.accepted }) : ""].filter(Boolean).join(" · ");
+}
 function renderOverview(o) {
   const v = o.score.value;
-  $("score").textContent = v; $("grade").textContent = o.score.grade.toUpperCase();
+  $("score").textContent = v; $("grade").textContent = t("g_" + o.score.grade_id).toUpperCase();
+  cov.accepted = o.score.accepted; paintCover();
   const ring = $("ring");
   ring.style.strokeDashoffset = 364.4 * (1 - v / 100);
   const col = v >= 90 ? "var(--ok)" : v >= 75 ? "var(--accent)" : v >= 50 ? "var(--warn)" : "var(--crit)";
@@ -255,6 +260,7 @@ function threatItem(it) {
 async function renderHygiene() {
   const [r, th] = await Promise.all([api("/api/hygiene"), api("/api/threats").catch(() => null)]);
   const box = $("hygiene");
+  cov.total = r.checks.length; cov.active = r.checks.filter((c) => c.status !== "na").length; paintCover();
   const look = { ok: ["check", "var(--ok)"], warn: ["alert", "var(--warn)"], ack: ["check", "var(--muted)"], na: ["minus", "var(--muted)"] };
   const enable = (key) => el("button", { class: "link", onclick: async () => { await setSetting({ [key]: true }); setTimeout(() => renderHygiene().catch(() => {}), 2500); } }, t("enable"));
   box.replaceChildren(...r.checks.map((c) => {
@@ -427,9 +433,12 @@ function renderMap() {
 /* ---------- drawers ---------- */
 function showDrawer(nodes) {
   const dr = $("drawer");
-  dr.replaceChildren(el("button", { class: "close", onclick: closeDrawer, "aria-label": t("close") }, icon("x")), ...nodes);
+  dr.replaceChildren(el("button", { class: "close", onclick: closeDrawer, "aria-label": t("close") }, icon("x")), ...nodes.filter(Boolean));
   dr.classList.add("on"); $("scrim").classList.add("on"); dr.setAttribute("aria-hidden", "false");
+  if (!opener) opener = document.activeElement;
+  dr.querySelector(".close").focus();
 }
+let opener = null;
 async function openDrawer(id) {
   openId = id;
   const d = await api(`/api/devices/${id}`), [col, , gi] = cs(d.class), label = clsLabel(d.class);
@@ -447,6 +456,9 @@ async function openDrawer(id) {
       label + (d.class !== "unknown" ? ` · ${Math.round(d.class_conf * 100)}% · ${d.class_source === "ai" ? t("by_ai") : t("by_rules")}` : "")))),
     el("div", { class: "block" }, el("h2", {}, t("name")), inp),
     el("div", { class: "block" }, el("div", { class: "set" }, el("div", { class: "lbl" }, t("critical"), el("small", {}, t("critical_hint"))), crit)),
+    d.critical === 1 ? el("div", { class: "block" }, el("h2", {}, t("fw_title")),
+      el("div", { class: "set" }, el("div", { class: "lbl" }, d.firmware_checked ? t("fw_last", { t: new Date(d.firmware_checked).toLocaleDateString(LANG) }) : t("fw_never"), el("small", {}, t("fw_hint"))),
+        el("button", { class: "link", onclick: async () => { await api(`/api/devices/${id}/firmware-checked`, { method: "POST", body: "{}" }); await refresh(); await openDrawer(id); } }, t("fw_mark")))) : null,
     el("div", { class: "block" }, el("h2", {}, t("type")), typeGrid(d),
       el("div", { class: "sub", id: "learn-note", style: "margin-top:6px" }, d.class_source === "user" ? t("type_user_note") : t("type_auto_note"))),
     el("div", { class: "block" }, el("h2", {}, t("trust")), seg),
@@ -503,7 +515,11 @@ function evidenceCard(e) {
     el("div", {}, el("code", {}, JSON.stringify(e.matched))), e.reason ? el("div", {}, e.reason) : null);
 }
 async function save(id, patch) { await api(`/api/devices/${id}`, { method: "PATCH", body: JSON.stringify(patch) }); await refresh(); await openDrawer(id); }
-function closeDrawer() { $("drawer").classList.remove("on"); $("scrim").classList.remove("on"); $("drawer").setAttribute("aria-hidden", "true"); openId = null; }
+function closeDrawer() {
+  $("drawer").classList.remove("on"); $("scrim").classList.remove("on"); $("drawer").setAttribute("aria-hidden", "true"); openId = null;
+  if (opener && document.contains(opener)) opener.focus();
+  opener = null;
+}
 
 /* ---------- weekly report ---------- */
 
@@ -632,6 +648,7 @@ async function boot() {
   document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeDrawer(); });
   await refresh();
   const open = /^d(\d+)$/.exec(location.hash.slice(1)); if (open) openDrawer(Number(open[1]));
-  setInterval(() => refresh().catch(() => {}), 8000);
+  setInterval(() => { if (!document.hidden) refresh().catch(() => {}); }, 8000);
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) refresh().catch(() => {}); });
 }
 boot().catch((e) => { $("status-text").textContent = t("unreachable", { e: e.message }); });

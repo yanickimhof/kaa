@@ -15,9 +15,9 @@ Kaa maps every device on your home network, recognises what each one is, checks 
 | | |
 |---|---|
 | **Device map** | Every device with its type, vendor and name, found by passive discovery (ARP, mDNS, SSDP). Each identification shows the evidence behind it, and you can correct it: Kaa learns from your corrections. Radio devices read from the Tado and Netatmo clouds (opt in) appear alongside, with battery and signal. |
-| **Security checks** | A compact checklist: Wi-Fi encryption, UPnP on the router, risky open ports, Internet exposure, network separation, devices to review, router identity, known exploited flaws. Each line is green, orange, acknowledged or not checked, and tells you what to do. |
-| **Health score** | One number from 0 to 100 with its history. Deterministic: severity never comes from an AI. |
-| **Alerts** | New unknown device, router hardware address change (the signature of a man-in-the-middle attack), a critical device going offline, weak Wi-Fi, exposed services. macOS notifications respect quiet hours. |
+| **Security checks** | A compact checklist: Wi-Fi encryption, UPnP on the router, risky open ports, Internet exposure, network separation, devices to review, router identity, firmware check reminders, known exploited flaws. Each line is green, orange, acknowledged or not checked, and tells you what to do. |
+| **Health score** | One number from 0 to 100 with its history. Deterministic: severity never comes from an AI. Acknowledging a finding does not raise the score; accepted risks are counted and shown next to it, with how many checks are active. |
+| **Alerts** | New unknown device, router hardware address change (the signature of a man-in-the-middle attack), a critical device going offline, weak Wi-Fi, exposed services, and a device that opens a new port after Kaa first checked it. macOS notifications respect quiet hours. |
 | **Known exploited flaws** | Matches your vendors and, when known, your exact models against the CISA KEV catalogue. Model level matches are shown first. |
 | **Internet** | Live latency, download and upload trends compared with your usual values, and what your connection currently supports (4K, video calls, gaming, cloud backups). |
 | **Presence** | For each device, seven days of presence hour by hour. |
@@ -35,7 +35,7 @@ Light and dark themes follow your system. The interface is available in English 
 1. **Discover.** A gentle sweep of your private network, then the operating system neighbour table.
 2. **Identify.** Signature rules (YAML, easy to extend) vote on a device class. Agreeing rules reinforce each other. An optional model only proposes a type when no rule matches.
 3. **Evaluate.** Deterministic rules in `findings.py` produce findings, each with its evidence and a fix.
-4. **Score and alert.** Acknowledged findings are free. Changes you need to know about become notifications.
+4. **Score and alert.** Changes you need to know about become notifications.
 
 More detail in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
@@ -78,7 +78,7 @@ Kaa listens on `127.0.0.1` only and scans only private networks. By default it m
 | Tado and Netatmo | their cloud APIs | your own sign in, read only |
 | AI analyst | the endpoint you configure | coarse device facts, no MAC or IP |
 
-See [SECURITY.md](SECURITY.md) for the security model.
+See [SECURITY.md](SECURITY.md) for the security model and [docs/AUDIT.md](docs/AUDIT.md) for the review notes.
 
 ## Contributing
 

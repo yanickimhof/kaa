@@ -109,3 +109,37 @@ def test_presence_and_exposure(env, monkeypatch):
     assert rules["KAA-EXPOSED-PORTS"]["severity"] == "high" and "CVE-2024-0001" in rules["KAA-EXPOSED-VULNS"]["detail"]
     checks = {c["id"]: c for c in service.hygiene()}
     assert checks["exposure"]["status"] == "warn"
+
+
+def test_scoring_grades_and_accepted():
+    from kaa import scoring
+    assert scoring.compute([])["grade_id"] == "clear"
+    acked = [{"status": "ack", "severity": "low"}]
+    r = scoring.compute(acked)
+    assert r["value"] == 97 and r["accepted"] == 1 and r["grade_id"] == "very_good"
+    assert scoring.compute([{"status": "open", "severity": "critical"}] * 4)["grade_id"] == "risk"
+
+
+def test_new_port_and_firmware_rules():
+    cam = {**_dev(2, "camera", label="Garden camera"), "critical": 1,
+           "facts": {"open_ports": [80, 554, 8080], "ports_baseline": [80, 554]}}
+    rules = {s.rule_id: s for s in findings.evaluate([cam], {"scanned_ids": {2}, "firmware_age": {2: 200}})}
+    assert rules["KAA-PORT-NEW"].evidence["ports"] == "8080" and rules["KAA-PORT-NEW"].severity == "medium"
+    assert rules["KAA-FIRMWARE-CHECK"].evidence["days"] == 200
+    telnet = {**cam, "facts": {"open_ports": [80, 23], "ports_baseline": [80]}}
+    assert {s.rule_id: s for s in findings.evaluate([telnet], {"scanned_ids": {2}})}["KAA-PORT-NEW"].severity == "high"
+    calm = {**cam, "facts": {"open_ports": [80], "ports_baseline": [80, 554]}}
+    assert not [s for s in findings.evaluate([calm], {"scanned_ids": {2}, "firmware_age": {2: 10}})
+                if s.rule_id in ("KAA-PORT-NEW", "KAA-FIRMWARE-CHECK")]
+
+
+def test_firmware_checked_endpoint_resets_the_clock(env):
+    cfg, db, service = env
+    did, _ = db.upsert_device("02:00:00:00:00:77", "192.168.1.7", False, ts="2025-01-01T00:00:00+00:00")
+    db.set_fields(did, critical=1)
+    service.evaluate()
+    assert any(f["rule_id"] == "KAA-FIRMWARE-CHECK" for f in db.list_findings())
+    c = TestClient(create_app(service, "secret"), base_url="http://127.0.0.1:8473")
+    assert c.post(f"/api/devices/{did}/firmware-checked", headers={"x-kaa-token": "secret"}).status_code == 200
+    assert not [f for f in db.list_findings() if f["rule_id"] == "KAA-FIRMWARE-CHECK" and f["status"] == "open"]
+    assert c.get(f"/api/devices/{did}").json()["firmware_checked"]

@@ -22,6 +22,7 @@ PEOPLE_CLASSES = {"computer", "phone", "tablet", "wearable"}
 WEAK_WIFI = {"open", "wep", "wpa"}
 FLAP_DROPS = 4              # disconnections within one hour
 CRITICAL_OFFLINE_MIN = 15   # minutes before a critical device is reported missing
+FIRMWARE_DAYS = 180         # days before a critical device is due a firmware check
 
 
 def _facts(d: dict) -> dict[str, Any]:
@@ -70,6 +71,12 @@ def evaluate(devices: list[dict], ctx: dict[str, Any]) -> list[FindingSpec]:
                 if port in ports:
                     specs.append(_spec(did, rid, sev, name, {
                         "port": port, "open_ports": sorted(ports), "method": "tcp connect"}))
+            base = f.get("ports_baseline")
+            fresh = sorted(ports - set(base)) if base is not None else []
+            if fresh:
+                high = any(PORT_RULES.get(p, ("", ""))[1] == "high" for p in fresh)
+                specs.append(_spec(did, "KAA-PORT-NEW", "high" if high else "medium", name, {
+                    "ports": ", ".join(str(p) for p in fresh), "count": len(fresh), "open_ports": sorted(ports)}))
             if f.get("is_gateway") and 80 in ports and 443 not in ports:
                 specs.append(_spec(did, "KAA-GW-HTTP", "low", name, {"open_ports": sorted(ports)}))
             if d["class"] == "lock" and ports:
@@ -83,6 +90,10 @@ def evaluate(devices: list[dict], ctx: dict[str, Any]) -> list[FindingSpec]:
                                    {"expired": str(f["probe_tls_expired"])}))
             if f.get("probe_ftp_anon"):
                 specs.append(_spec(did, "KAA-FTP-ANON", "high", name, {"port": 21}))
+
+        age = ctx.get("firmware_age", {}).get(did)
+        if age is not None and age >= FIRMWARE_DAYS:
+            specs.append(_spec(did, "KAA-FIRMWARE-CHECK", "low", name, {"days": int(age)}))
 
         if f.get("is_gateway") and any("InternetGatewayDevice" in s for s in f.get("ssdp_st", [])):
             specs.append(_spec(did, "KAA-UPNP-IGD", "medium", name, {

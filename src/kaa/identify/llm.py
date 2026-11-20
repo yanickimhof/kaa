@@ -39,6 +39,8 @@ class AIConfigError(ValueError):
 
 
 def check_endpoint(endpoint: str, allow_remote: bool) -> None:
+    if urlparse(endpoint).scheme not in ("http", "https"):
+        raise AIConfigError("AI endpoint must start with http:// or https://")
     host = urlparse(endpoint).hostname or ""
     if host not in {"127.0.0.1", "localhost", "::1"} and not allow_remote:
         raise AIConfigError(

@@ -80,6 +80,10 @@ class Config:
 def load(home: Path | None = None) -> Config:
     cfg = Config(home=home or home_dir())
     cfg.home.mkdir(parents=True, exist_ok=True)
+    try:
+        cfg.home.chmod(0o700)  # the inventory of your network is for you only
+    except OSError:
+        pass
     path = cfg.home / "config.toml"
     if path.exists():
         with path.open("rb") as fh:

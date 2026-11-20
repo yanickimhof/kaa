@@ -20,6 +20,16 @@ CATALOG: dict[str, dict[str, tuple[str, str, str]]] = {
                "Check its power and Wi-Fi signal. Repeated reconnections can also be a sign of a failing device or of someone interfering with the network."),
         "fr": ("Connexion instable : {name}", "Cet appareil s'est déconnecté {drops_last_hour} fois en une heure.",
                "Vérifiez son alimentation et son signal Wi-Fi. Des reconnexions répétées peuvent aussi indiquer un appareil défaillant ou une interférence.")},
+    "KAA-PORT-NEW": {
+        "en": ("New open port on {name}", "Since Kaa first checked this device, {count} more port(s) opened: {ports}.",
+               "If you did not install or enable something, turn the service off or update the device. Acknowledge it if the change is expected."),
+        "fr": ("Nouveau port ouvert sur {name}", "Depuis la première vérification de cet appareil, {count} port(s) de plus sont ouverts : {ports}.",
+               "Si vous n'avez rien installé ni activé, désactivez le service ou mettez l'appareil à jour. Acquittez si ce changement est attendu.")},
+    "KAA-FIRMWARE-CHECK": {
+        "en": ("Firmware check due: {name}", "Kaa cannot read firmware versions. It has been {days} days since you last checked this device.",
+               "Open the vendor app, install any update, then press Mark as checked in the device panel."),
+        "fr": ("Vérification du firmware : {name}", "Kaa ne peut pas lire les versions de firmware. Cela fait {days} jours que vous n'avez pas vérifié cet appareil.",
+               "Ouvrez l'application du constructeur, installez les mises à jour, puis appuyez sur Marquer comme vérifié dans la fiche de l'appareil.")},
     "KAA-RANDOM-MAC": {
         "en": ("Private Wi-Fi address: {name}",
                "This device uses a randomised MAC address, a privacy feature of modern phones and laptops. It cannot be recognised by vendor.",

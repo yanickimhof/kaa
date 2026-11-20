@@ -37,6 +37,7 @@
           <div class="ring-text"><div class="num" id="score">–</div><div class="grade" id="grade"></div></div>
         </div>
         <div class="kline" id="kline"></div>
+        <div class="kline" id="cover"></div>
         <div class="trend" data-tt="trend_tip">
           <svg class="spark" id="spark" viewBox="0 0 240 44" preserveAspectRatio="none" aria-hidden="true"></svg>
           <div class="trend-l"><span id="t-min"></span><span id="t-delta"></span><span id="t-max"></span></div>
@@ -83,7 +84,7 @@
 
   <footer class="foot" id="foot"></footer>
   <div class="scrim" id="scrim"></div>
-  <aside class="drawer" id="drawer" aria-hidden="true"></aside>
+  <aside class="drawer" id="drawer" role="dialog" aria-modal="true" aria-hidden="true"></aside>
   <script src="app.js" type="module"></script>
 </body>
 </html>

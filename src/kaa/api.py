@@ -23,6 +23,7 @@ from . import __version__
 from . import settings as settings_mod
 from . import texts
 from .cloud import CloudError
+from .db import now as now_iso
 from .models import CLASSES, SEVERITY_RANK, TRUST_LEVELS
 from .service import Service
 
@@ -73,7 +74,10 @@ def create_app(service: Service, token: str) -> FastAPI:
         resp.headers["Referrer-Policy"] = "no-referrer"
         resp.headers["Content-Security-Policy"] = (
             "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; "
-            "frame-ancestors 'none'")
+            "frame-ancestors 'none'; base-uri 'none'; form-action 'none'; object-src 'none'")
+        resp.headers["Cross-Origin-Resource-Policy"] = "same-origin"
+        if request.url.path.startswith("/api/"):
+            resp.headers["Cache-Control"] = "no-store"
         return resp
 
     def require_token(x_kaa_token: str | None = Header(default=None)) -> None:
@@ -129,7 +133,16 @@ def create_app(service: Service, token: str) -> FastAPI:
              and f["status"] != "resolved"),
             key=lambda f: SEVERITY_RANK[f["severity"]]), lang)
         d["history"] = service.db.list_events(30, device_id=device_id)
+        d["firmware_checked"] = service.db.observations(device_id).get("user.firmware_checked")
         return d
+
+    @app.post("/api/devices/{device_id}/firmware-checked", dependencies=[Depends(require_token)])
+    def firmware_checked(device_id: int):
+        if not service.db.get_device(device_id):
+            raise HTTPException(404, "unknown device")
+        service.db.observe(device_id, "user", "firmware_checked", now_iso())
+        service.evaluate()
+        return {"ok": True}
 
     @app.patch("/api/devices/{device_id}", dependencies=[Depends(require_token)])
     def patch_device(device_id: int, body: DevicePatch):
@@ -192,10 +205,6 @@ def create_app(service: Service, token: str) -> FastAPI:
             return {"started": False}
         threading.Thread(target=service.run_speedtest, daemon=True).start()
         return {"started": True}
-
-    @app.get("/api/report")
-    def report(days: int = 7):
-        return service.report(max(1, min(days, 90)))
 
     @app.get("/api/settings")
     def get_settings():

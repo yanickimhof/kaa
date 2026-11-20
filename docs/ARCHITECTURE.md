@@ -18,7 +18,7 @@ collectors ──► service cycle ──► SQLite ──► API ──► web 
    class; agreeing rules reinforce each other. Only if nothing matches, and AI is
    enabled, a local model proposes a class.
 6. **Evaluate**: deterministic rules in `findings.py` produce findings with evidence.
-7. **Score**: 100 minus capped penalties per severity. Acknowledged findings are free.
+7. **Score**: 100 minus capped penalties per severity. Acknowledged findings keep their penalty and are reported as accepted risks.
 
 Around the cycle, small optional workers run: Internet latency every 15 seconds,
 Wi-Fi encryption (read only, macOS), the CISA catalogue, and the Internet exposure

@@ -68,6 +68,7 @@ class Service:
             "probe_tls_expired": obs.get("probe.tls_expired", ""),
             "probe_ftp_anon": obs.get("probe.ftp_anon", False),
             "open_ports": obs.get("scan.open_ports", []),
+            "ports_baseline": obs.get("scan.ports_baseline"),
         }
 
     # ---- one cycle -----------------------------------------------------
@@ -182,6 +183,13 @@ class Service:
             ips = [ip for ip in by_ip if scope.allowed(ip)]
             results = portscan.scan(scope, ips, cfg.ports)
             for ip, open_ports in results.items():
+                prev = db.observations(by_ip[ip])
+                if "scan.ports_baseline" not in prev:
+                    db.observe(by_ip[ip], "scan", "ports_baseline", open_ports)
+                elif prev.get("scan.open_ports") is not None:
+                    opened = sorted(set(open_ports) - set(prev["scan.open_ports"]))
+                    if opened:
+                        db.add_event("port_opened", "New open port(s): " + ", ".join(map(str, opened)), by_ip[ip])
                 db.observe(by_ip[ip], "scan", "open_ports", open_ports)
                 scanned_ids.add(by_ip[ip])
                 if 443 in open_ports:
@@ -435,7 +443,12 @@ class Service:
             if d.get("critical") == 1 and not d["online"]:
                 last = dt.datetime.fromisoformat(d["last_seen"])
                 offline_min[d["id"]] = (dt.datetime.now(dt.timezone.utc) - last).total_seconds() / 60
-        ctx = {"baseline_at": self.db.meta_get("baseline_at"), "flaps": flaps, "offline_min": offline_min,
+        fw_age: dict[int, int] = {}
+        for d in devices:
+            if d.get("critical") == 1:
+                stamp = self.db.observations(d["id"]).get("user.firmware_checked") or d["first_seen"]
+                fw_age[d["id"]] = (dt.datetime.now(dt.timezone.utc) - dt.datetime.fromisoformat(stamp)).days
+        ctx = {"firmware_age": fw_age, "baseline_at": self.db.meta_get("baseline_at"), "flaps": flaps, "offline_min": offline_min,
                "scanned_ids": scanned_ids, "gateway_alert": gateway_alert,
                "cloud": self.db.list_cloud(), "wifi": self.state.get("wifi"),
                "kev": self._kev_model_hits(devices),
@@ -515,29 +528,6 @@ class Service:
                 "alerts_opened": [f["title"] for f in opened][:10],
                 "alerts_resolved": [f["title"] for f in resolved][:10],
                 "headline": ", ".join(parts)}
-
-    def report(self, days: int = 7) -> dict:
-        """Facts for the weekly report: changes, open issues, Internet health, threats."""
-        d = self.digest(days * 24)
-        scores = [x["value"] for x in self.db.list_scores(2000)
-                  if x["ts"] >= d["since"]] or [d["score"]]
-        tests = [t for t in self.db.list_speedtests(500) if t["ts"] >= d["since"]]
-        avg = lambda k: round(sum(t[k] for t in tests if t[k] is not None) / max(1, sum(1 for t in tests if t[k] is not None)), 1) if tests else None  # noqa: E731
-        ev = self.db.list_events(1000, since=d["since"])
-        open_f = [f for f in self.db.list_findings("open") if f["severity"] != "info"]
-        return {
-            "days": days, "since": d["since"], "score": d["score"],
-            "score_min": min(scores), "score_max": max(scores), "score_start": d["score_before"],
-            "new_devices": d["new_devices"], "went_offline": d["went_offline"],
-            "alerts_opened": d["alerts_opened"], "alerts_resolved": d["alerts_resolved"],
-            "open": [{"severity": f["severity"], "title": f["title"], "device_id": f["device_id"]}
-                     for f in sorted(open_f, key=lambda f: scoring.PENALTY.get(f["severity"], 0), reverse=True)][:15],
-            "internet": {"tests": len(tests), "avg_down": avg("down"), "avg_up": avg("up"),
-                         "avg_latency": avg("latency"),
-                         "outages": sum(1 for e in ev if e["kind"] == "internet_down")},
-            "threat_matches": len(self.threats()["items"]) if self.cfg.threats else None,
-            "devices": self.summary()["devices"], "online": self.summary()["online"],
-        }
 
     # ---- AI analyst -----------------------------------------------------
     def _ai_on(self) -> bool:
@@ -726,11 +716,10 @@ class Service:
         else:
             add("wifi", "na")
         add("upnp", flag("KAA-UPNP-IGD"))
-        exposed = has("KAA-PORT-TELNET", "KAA-PORT-FTP", "KAA-PORT-RDP", "KAA-PORT-VNC", "KAA-PORT-RTSP",
-                      "KAA-PORT-MQTT", "KAA-LOCK-EXPOSED", "KAA-FTP-ANON", "KAA-CAMERA-HTTP", "KAA-GW-HTTP")
-        add("exposed", flag("KAA-PORT-TELNET", "KAA-PORT-FTP", "KAA-PORT-RDP", "KAA-PORT-VNC", "KAA-PORT-RTSP",
-                            "KAA-PORT-MQTT", "KAA-LOCK-EXPOSED", "KAA-FTP-ANON", "KAA-CAMERA-HTTP", "KAA-GW-HTTP")
-            if exposed else ("ok" if scanned else "na"), n=exposed)
+        port_rules = ("KAA-PORT-TELNET", "KAA-PORT-FTP", "KAA-PORT-RDP", "KAA-PORT-VNC", "KAA-PORT-RTSP",
+                      "KAA-PORT-MQTT", "KAA-LOCK-EXPOSED", "KAA-FTP-ANON", "KAA-CAMERA-HTTP", "KAA-GW-HTTP", "KAA-PORT-NEW")
+        exposed = has(*port_rules)
+        add("exposed", flag(*port_rules) if exposed else ("ok" if scanned else "na"), n=exposed)
         ex = self.exposure()
         if ex["data"] is not None:
             add("exposure", flag("KAA-EXPOSED-PORTS", "KAA-EXPOSED-VULNS"), n=len(ex["data"]["ports"]))
@@ -741,6 +730,10 @@ class Service:
         review = has("KAA-NEW-DEVICE", "KAA-UNIDENTIFIED")
         add("review", flag("KAA-NEW-DEVICE", "KAA-UNIDENTIFIED"), n=review)
         add("gw", flag("KAA-GATEWAY-MAC-CHANGED"))
+        if any(d.get("critical") == 1 for d in self.db.list_devices()):
+            add("fw", flag("KAA-FIRMWARE-CHECK"), n=has("KAA-FIRMWARE-CHECK"))
+        else:
+            add("fw", "na")
         if self.cfg.threats and self.kev_path.exists():
             th = self.threats()
             hits = sum(1 for i in th["items"] if i["match"] == "model")
@@ -787,6 +780,9 @@ class Service:
             threading.Thread(target=self.refresh_threats, daemon=True).start()
             threading.Thread(target=self.refresh_exposure, daemon=True).start()
             self.run_cycle()
+            if time.time() - float(self.db.meta_get("pruned_ts") or 0) > 86400:
+                self.db.prune()
+                self.db.meta_set("pruned_ts", str(time.time()))
             stop.wait(self.cfg.interval)
 
     def summary(self) -> dict:

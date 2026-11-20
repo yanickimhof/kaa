@@ -66,7 +66,8 @@ def seed(home: Path):
     for suf, ip, host, vendor, label, cls, trust, ports, online in LAN:
         mac = f"02:aa:bb:cc:00:{suf}" if cls in ("phone", "tablet", "computer") else f"a0:b1:c2:00:00:{suf}"
         did, _ = db.upsert_device(mac, ip, mac.startswith("02"), ts=first)
-        db.set_fields(did, hostname=host, vendor=vendor, label=label, trust=trust)
+        db.set_fields(did, hostname=host, vendor=vendor, label=label, trust=trust,
+                      critical=1 if cls in ("router", "lock", "camera") else 0)
         db.set_classification(did, cls, 0.95 if cls != "unknown" else 0.0, "demo", [{"rule": "vendor-" + cls, "label": f"Vendor and name point to a {cls}", "confidence": 0.9, "matched": {"vendor": {"contains": (vendor or "").split(",")[0].lower()}}}] if cls != "unknown" else [])
         db._x("update devices set online=?, last_seen=? where id=?", (int(online), NOW.isoformat() if online else (NOW - dt.timedelta(hours=9)).isoformat(), did))
         db.observe(did, "scan", "open_ports", ports)

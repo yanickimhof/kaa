@@ -100,13 +100,15 @@ def test_offline_device_marked(world):
     assert [d["online"] for d in service.db.list_devices() if d["ip"] == "192.168.50.20"] == [False]
 
 
-def test_acknowledged_findings_do_not_cost_score(world):
+def test_acknowledging_does_not_raise_the_score(world):
     service, _ = world
     service.run_cycle()
-    before = scoring.compute(service.db.list_findings())["value"]
+    before = scoring.compute(service.db.list_findings())
     f = [x for x in service.db.list_findings() if x["rule_id"] == "KAA-UPNP-IGD"][0]
     service.db.ack_finding(f["id"])
-    assert scoring.compute(service.db.list_findings())["value"] > before
+    after = scoring.compute(service.db.list_findings())
+    assert after["value"] == before["value"]             # accepting a risk does not remove it
+    assert after["accepted"] == before["accepted"] + 1 and after["counts"]["medium"] == before["counts"]["medium"] - 1
 
 
 # ---- API ------------------------------------------------------------------

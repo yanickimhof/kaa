@@ -196,8 +196,7 @@ def test_report_and_internet_endpoints(world, monkeypatch):
     c = TestClient(create_app(service, "secret"), base_url="http://127.0.0.1:8473")
     net = c.get("/api/internet").json()
     assert net["last"]["down"] == 480.0 and net["outages_7d"] == 0
-    rep = c.get("/api/report?days=7").json()
-    assert rep["internet"]["avg_down"] == 480.0 and rep["devices"] >= 2 and "open" in rep
+    assert c.get("/api/report").status_code == 404           # the weekly report was retired
 
 
 def test_ai_features_use_the_model_with_facts_and_never_addresses(world, monkeypatch):

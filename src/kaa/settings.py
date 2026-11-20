@@ -90,6 +90,7 @@ def _lit(v: Any) -> str:
     if isinstance(v, list):
         return "[" + ", ".join(_lit(x) for x in v) + "]"
     s = str(v).replace("\\", "\\\\").replace('"', '\\"')
+    s = "".join(c if c >= " " and c != "\x7f" else f"\\u{ord(c):04x}" for c in s)
     return f'"{s}"'
 
 
