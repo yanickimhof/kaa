@@ -16,7 +16,7 @@ kaa update-data   # downloads the public vendor registry, once
 kaa serve --open
 ```
 
-Kaa needs Python 3.11 or later. On a Mac, add the menu bar item with `pipx install "kaa[menubar] @ git+https://github.com/yanickimhof/kaa"` and run `kaa menubar`.
+Kaa needs Python 3.11 or later. No `pipx`? Install [uv](https://docs.astral.sh/uv/) (`brew install uv`) and use `uv tool install git+https://github.com/yanickimhof/kaa` instead; it fetches a suitable Python by itself. On a Mac, add the menu bar item with `pipx install "kaa[menubar] @ git+https://github.com/yanickimhof/kaa"` and run `kaa menubar`.
 
 ## What you get
 
