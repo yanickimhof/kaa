@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import argparse
+import json
+import socket
 import sys
 import threading
+import urllib.request
 import webbrowser
 
 from . import __version__
@@ -19,21 +22,50 @@ def _boot() -> tuple[config_mod.Config, Database, Service]:
     return cfg, db, Service(cfg, db)
 
 
+def port_busy(host: str, port: int) -> bool:
+    with socket.socket() as s:
+        s.settimeout(0.5)
+        return s.connect_ex((host, port)) == 0
+
+
+def kaa_running(url: str) -> bool:
+    try:
+        with urllib.request.urlopen(url + "/api/session", timeout=2) as r:  # noqa: S310
+            return "version" in json.loads(r.read())
+    except (OSError, ValueError):
+        return False
+
+
 def cmd_serve(args: argparse.Namespace) -> int:
     import uvicorn
 
     from .api import create_app
 
     cfg, db, service = _boot()
+    if args.port:
+        cfg.port = args.port
+    url = f"http://{cfg.host}:{cfg.port}"
+    if port_busy(cfg.host, cfg.port):
+        if kaa_running(url):
+            print(f"Kaa is already running at {url}")
+            if args.open:
+                webbrowser.open(url)
+            return 0
+        print(f"Port {cfg.port} is used by another program.\n"
+              f"See which: lsof -nP -iTCP:{cfg.port} -sTCP:LISTEN\n"
+              f"Or pick another port: kaa serve --port 8742 "
+              f"(make it permanent with [server] port in config.toml)", file=sys.stderr)
+        return 1
     token = config_mod.load_token(cfg)
     stop = threading.Event()
     if not service.oui.loaded:
         print("Vendor names need the IEEE registry: run `kaa update-data` once.")
     threading.Thread(target=service.loop, args=(stop,), daemon=True).start()
-    url = f"http://{cfg.host}:{cfg.port}"
     print(f"Kaa {__version__} on {url}  (data: {cfg.home})")
     if args.open:
-        threading.Timer(1.2, lambda: webbrowser.open(url)).start()
+        opener = threading.Timer(1.2, lambda: webbrowser.open(url))
+        opener.daemon = True
+        opener.start()
     try:
         uvicorn.run(create_app(service, token), host=cfg.host, port=cfg.port,
                     log_level="warning")
@@ -105,6 +137,7 @@ def main(argv: list[str] | None = None) -> int:
 
     s = sub.add_parser("serve", help="run the web app and the background scanner")
     s.add_argument("--open", action="store_true", help="open the browser")
+    s.add_argument("--port", type=int, help="override the port for this run")
     s.set_defaults(fn=cmd_serve)
 
     s = sub.add_parser("scan", help="run one scan now")

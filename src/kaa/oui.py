@@ -7,6 +7,7 @@ registry once and stores it locally; lookups are then fully offline.
 from __future__ import annotations
 
 import csv
+import ssl
 import urllib.request
 from pathlib import Path
 
@@ -50,10 +51,25 @@ class Oui:
         return self._table.get(key)
 
 
+def ssl_context() -> ssl.SSLContext:
+    """Trust the operating system's certificate store (keychain on macOS).
+
+    Python builds shipped by uv or pyenv do not read it by default, which breaks
+    behind corporate or security software that re-signs HTTPS. Verification is
+    never disabled.
+    """
+    try:
+        import truststore
+
+        return truststore.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+    except ImportError:  # pragma: no cover
+        return ssl.create_default_context()
+
+
 def download(dest: Path, url: str = IEEE_URL, timeout: float = 30.0) -> int:
     dest.parent.mkdir(parents=True, exist_ok=True)
     req = urllib.request.Request(url, headers={"User-Agent": "kaa-oui-update"})
-    with urllib.request.urlopen(req, timeout=timeout) as resp:  # noqa: S310
+    with urllib.request.urlopen(req, timeout=timeout, context=ssl_context()) as resp:  # noqa: S310
         body = resp.read()
     head = body[:200].decode("utf-8", errors="replace")
     if "Assignment" not in head:

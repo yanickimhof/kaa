@@ -38,7 +38,7 @@ def home_dir() -> Path:
 class Config:
     home: Path = field(default_factory=home_dir)
     host: str = "127.0.0.1"
-    port: int = 8731
+    port: int = 8473
     interval: int = 300  # seconds between automatic cycles
     networks: list[str] = field(default_factory=list)  # empty = auto-detect
     max_hosts: int = 1024
