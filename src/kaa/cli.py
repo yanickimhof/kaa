@@ -122,6 +122,18 @@ def cmd_doctor(_args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_service(args: argparse.Namespace) -> int:
+    from . import launchd
+
+    cfg = config_mod.load()
+    if args.action == "status":
+        print(f"Background service: {launchd.status()}")
+        return 0
+    ok, msg = launchd.install(cfg) if args.action == "install" else launchd.uninstall()
+    print(msg, file=sys.stdout if ok else sys.stderr)
+    return 0 if ok else 1
+
+
 def cmd_menubar(_args: argparse.Namespace) -> int:
     from .menubar import run
 
@@ -147,6 +159,9 @@ def main(argv: list[str] | None = None) -> int:
     sub.add_parser("devices", help="list known devices").set_defaults(fn=cmd_devices)
     sub.add_parser("update-data", help="download the IEEE vendor registry").set_defaults(fn=cmd_update_data)
     sub.add_parser("doctor", help="check setup and scope").set_defaults(fn=cmd_doctor)
+    s = sub.add_parser("service", help="run Kaa in the background (macOS)")
+    s.add_argument("action", choices=["install", "uninstall", "status"])
+    s.set_defaults(fn=cmd_service)
     sub.add_parser("menubar", help="macOS menu bar item").set_defaults(fn=cmd_menubar)
 
     args = p.parse_args(argv)

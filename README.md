@@ -43,6 +43,7 @@ Kaa needs Python 3.11 or later. No `pipx`? Install [uv](https://docs.astral.sh/u
 | `kaa scan [--ports]` | one scan from the terminal |
 | `kaa devices` | list what Kaa knows |
 | `kaa doctor` | check setup and scope |
+| `kaa service install` | keep Kaa running in the background, from login (macOS) |
 | `kaa menubar` | macOS menu bar item |
 
 Configuration lives in `config.toml` inside Kaa's data folder (`kaa doctor` prints the path). See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for how it works and [SECURITY.md](SECURITY.md) for the security model.
