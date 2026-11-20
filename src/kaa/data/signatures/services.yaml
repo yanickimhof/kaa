@@ -1,0 +1,97 @@
+# Signatures from discovery services (mDNS, SSDP) and open ports.
+
+- id: gateway-role
+  class: router
+  label: Default gateway
+  confidence: 0.9
+  when: { is_gateway: { is_true: true } }
+
+- id: ssdp-igd
+  class: router
+  label: UPnP Internet Gateway Device
+  confidence: 0.9
+  when: { ssdp_st: { has_contains: InternetGatewayDevice } }
+
+- id: mdns-googlecast
+  class: media
+  label: Google Cast receiver
+  confidence: 0.8
+  when: { mdns_services: { has: _googlecast._tcp } }
+
+- id: mdns-sonos
+  class: speaker
+  label: Sonos
+  confidence: 0.95
+  when: { mdns_services: { has: _sonos._tcp } }
+
+- id: mdns-printer
+  class: printer
+  label: Network printer (IPP / LPD)
+  confidence: 0.9
+  when: { mdns_services: { has_any: [_ipp._tcp, _printer._tcp, _pdl-datastream._tcp] } }
+
+- id: mdns-homekit
+  class: iot
+  label: HomeKit accessory
+  confidence: 0.7
+  when: { mdns_services: { has: _hap._tcp } }
+
+- id: mdns-matter
+  class: iot
+  label: Matter device
+  confidence: 0.7
+  when: { mdns_services: { has_any: [_matter._tcp, _matterc._udp] } }
+
+- id: mdns-smb-nas
+  class: nas
+  label: File server (SMB with Time Machine)
+  confidence: 0.7
+  when: { mdns_services: { has: _adisk._tcp } }
+
+- id: mdns-airplay-receiver
+  class: media
+  label: AirPlay receiver
+  confidence: 0.45
+  when: { mdns_services: { has: _airplay._tcp } }
+
+- id: mdns-raop
+  class: speaker
+  label: AirPlay audio receiver
+  confidence: 0.4
+  when: { mdns_services: { has: _raop._tcp } }
+
+- id: mdns-ssh-workstation
+  class: computer
+  label: Workstation advertising SSH and file sharing
+  confidence: 0.55
+  when: { mdns_services: { has_any: [_workstation._tcp, _device-info._tcp] } }
+
+- id: port-jetdirect
+  class: printer
+  label: Raw print port 9100
+  confidence: 0.75
+  when: { open_ports: { has: 9100 } }
+
+- id: port-rtsp
+  class: camera
+  label: RTSP video port
+  confidence: 0.5
+  when: { open_ports: { has: 554 } }
+
+- id: port-synology-dsm
+  class: nas
+  label: DSM web ports
+  confidence: 0.6
+  when: { open_ports: { has: 5001 } }
+
+- id: ssdp-roku
+  class: media
+  label: Roku
+  confidence: 0.85
+  when: { ssdp_server: { contains: roku } }
+
+- id: ssdp-dlna-tv
+  class: tv
+  label: DLNA media renderer
+  confidence: 0.5
+  when: { ssdp_st: { has_contains: MediaRenderer } }

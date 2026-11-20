@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark light">
+  <title>Kaa</title>
+  <link rel="icon" href="logo.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="app.css">
+</head>
+<body>
+  <header class="bar">
+    <div class="brand">
+      <img src="logo.svg" alt="" width="26" height="26">
+      <span class="name">Kaa</span>
+      <span class="chip mono" id="scope" title="Networks in scope"></span>
+    </div>
+    <div class="bar-right">
+      <span class="status" id="status"><i class="dot"></i><span id="status-text">Starting</span></span>
+      <button class="btn" id="scan">Scan now</button>
+      <button class="btn ghost" id="deep" title="Adds a TCP check of 20 well known ports on devices in scope">Deep check</button>
+    </div>
+  </header>
+
+  <main class="grid">
+    <aside class="col-left">
+      <section class="card score">
+        <h2>Network health</h2>
+        <div class="ring-wrap">
+          <svg viewBox="0 0 140 140" class="ring" aria-hidden="true">
+            <circle cx="70" cy="70" r="58" class="ring-bg"/>
+            <circle cx="70" cy="70" r="58" class="ring-fg" id="ring" transform="rotate(-90 70 70)"/>
+          </svg>
+          <div class="ring-text"><div class="num" id="score">–</div><div class="grade" id="grade"></div></div>
+        </div>
+        <div class="kpis">
+          <div><b id="k-online">–</b><span>online</span></div>
+          <div><b id="k-devices">–</b><span>devices</span></div>
+          <div><b id="k-unknown">–</b><span>unidentified</span></div>
+        </div>
+        <svg class="spark" id="spark" viewBox="0 0 240 36" preserveAspectRatio="none" aria-hidden="true"></svg>
+      </section>
+
+      <section class="card">
+        <h2>What to do now</h2>
+        <div id="actions" class="actions"></div>
+      </section>
+    </aside>
+
+    <section class="col-right">
+      <section class="card map-card">
+        <div class="card-head"><h2>Network map</h2><div class="legend" id="legend"></div></div>
+        <svg id="map" viewBox="0 0 820 420" role="img" aria-label="Network map"></svg>
+      </section>
+
+      <section class="card">
+        <div class="card-head">
+          <h2>Devices</h2>
+          <div class="tools">
+            <input id="q" class="search" type="search" placeholder="Search name, IP, vendor" autocomplete="off">
+            <select id="filter" class="select">
+              <option value="all">All</option>
+              <option value="online">Online</option>
+              <option value="attention">Needs attention</option>
+              <option value="unknown">Unidentified</option>
+            </select>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table id="devices">
+            <thead><tr><th></th><th>Device</th><th>Type</th><th>Address</th><th>Vendor</th><th>Trust</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </section>
+    </section>
+  </main>
+
+  <div class="scrim" id="scrim"></div>
+  <aside class="drawer" id="drawer" aria-hidden="true"></aside>
+  <script src="app.js" type="module"></script>
+</body>
+</html>

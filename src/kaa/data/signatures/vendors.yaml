@@ -1,0 +1,98 @@
+# Vendor based signatures. `vendor` comes from the IEEE registry (organisation name).
+# Confidence is deliberately modest: a vendor alone rarely proves a device type.
+
+- id: vendor-sonos
+  class: speaker
+  label: Sonos speaker
+  confidence: 0.9
+  when: { vendor: { contains: sonos } }
+
+- id: vendor-synology
+  class: nas
+  label: Synology NAS
+  confidence: 0.85
+  when: { vendor: { contains: synology } }
+
+- id: vendor-qnap
+  class: nas
+  label: QNAP NAS
+  confidence: 0.85
+  when: { vendor: { contains: qnap } }
+
+- id: vendor-raspberry
+  class: computer
+  label: Raspberry Pi
+  confidence: 0.8
+  when: { vendor: { contains: raspberry pi } }
+
+- id: vendor-nintendo
+  class: game_console
+  label: Nintendo console
+  confidence: 0.9
+  when: { vendor: { contains: nintendo } }
+
+- id: vendor-sony-interactive
+  class: game_console
+  label: PlayStation
+  confidence: 0.85
+  when: { vendor: { contains: sony interactive } }
+
+- id: vendor-tesla
+  class: car
+  label: Tesla vehicle
+  confidence: 0.85
+  when: { vendor: { contains: tesla } }
+
+- id: vendor-netatmo
+  class: sensor
+  label: Netatmo device
+  confidence: 0.85
+  when: { vendor: { contains: netatmo } }
+
+- id: vendor-tado
+  class: thermostat
+  label: tado thermostat or bridge
+  confidence: 0.85
+  when: { vendor: { contains: tado } }
+
+- id: vendor-espressif
+  class: iot
+  label: Espressif based IoT device
+  confidence: 0.6
+  when: { vendor: { contains: espressif } }
+
+- id: vendor-tuya
+  class: iot
+  label: Tuya smart device
+  confidence: 0.6
+  when: { vendor: { contains: tuya } }
+
+- id: vendor-camera-makers
+  class: camera
+  label: IP camera vendor
+  confidence: 0.75
+  when: { vendor: { regex: "hikvision|dahua|reolink|amcrest|axis communications|wyze|eufy|arlo" } }
+
+- id: vendor-printer-makers
+  class: printer
+  label: Printer vendor
+  confidence: 0.6
+  when: { vendor: { regex: "brother industries|epson|canon|lexmark|xerox|kyocera|ricoh" } }
+
+- id: vendor-network-gear
+  class: access_point
+  label: Network equipment vendor
+  confidence: 0.4
+  when: { vendor: { regex: "ubiquiti|tp-link|netgear|aruba|ruckus|mikrotik|zyxel|avm|fritz" } }
+
+- id: vendor-roku
+  class: media
+  label: Roku
+  confidence: 0.85
+  when: { vendor: { contains: roku } }
+
+- id: vendor-amazon
+  class: speaker
+  label: Amazon device
+  confidence: 0.45
+  when: { vendor: { contains: amazon } }

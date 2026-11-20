@@ -1,0 +1,85 @@
+# Hostname patterns. Weak on their own, strong when they agree with other signals.
+
+- id: host-iphone
+  class: phone
+  label: iPhone
+  confidence: 0.8
+  when: { hostname: { regex: "iphone" } }
+
+- id: host-ipad
+  class: tablet
+  label: iPad
+  confidence: 0.8
+  when: { hostname: { regex: "ipad" } }
+
+- id: host-mac
+  class: computer
+  label: Mac
+  confidence: 0.75
+  when: { hostname: { regex: "macbook|imac|mac-?mini|mac-?studio|mac-?pro" } }
+
+- id: host-appletv
+  class: tv
+  label: Apple TV
+  confidence: 0.8
+  when: { hostname: { regex: "apple-?tv" } }
+
+- id: host-homepod
+  class: speaker
+  label: HomePod
+  confidence: 0.85
+  when: { hostname: { regex: "homepod" } }
+
+- id: host-android
+  class: phone
+  label: Android phone
+  confidence: 0.6
+  when: { hostname: { regex: "android|galaxy|pixel|oneplus|xiaomi|redmi" } }
+
+- id: host-echo
+  class: speaker
+  label: Amazon Echo
+  confidence: 0.6
+  when: { hostname: { regex: "^echo|alexa" } }
+
+- id: host-chromecast
+  class: media
+  label: Chromecast
+  confidence: 0.8
+  when: { hostname: { regex: "chromecast" } }
+
+- id: host-windows-pc
+  class: computer
+  label: Windows PC
+  confidence: 0.6
+  when: { hostname: { regex: "^desktop-|^laptop-|^win-" } }
+
+- id: host-printer
+  class: printer
+  label: Printer
+  confidence: 0.6
+  when: { hostname: { regex: "printer|^npi|^brw|^epson|^hp[a-f0-9]{4,}" } }
+
+- id: host-camera
+  class: camera
+  label: Camera
+  confidence: 0.55
+  when: { hostname: { regex: "cam(era)?[-_ ]|ipcam|doorbell" } }
+
+- id: host-nas
+  class: nas
+  label: NAS
+  confidence: 0.6
+  when: { hostname: { regex: "diskstation|nas$|^nas|qnap|synology" } }
+
+- id: host-esp
+  class: iot
+  label: ESP based device
+  confidence: 0.6
+  when: { hostname: { regex: "^esp[-_]|espressif|tasmota|shelly" } }
+
+- id: host-tv
+  class: tv
+  label: Smart TV
+  confidence: 0.55
+  when: { hostname: { regex: "samsung.*tv|lg.*tv|\\[tv\\]|^tv-|bravia|webos" } }
