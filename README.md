@@ -53,6 +53,8 @@ Kaa needs Python 3.11 or later. Without `pipx`, install [uv](https://docs.astral
 
 On macOS, keep it running from login with `kaa service install`. This also starts the menu bar icon.
 
+To use Kaa like an app, open it in Chrome and choose Install Kaa (address bar or menu), or in Safari choose File, Add to Dock. It opens in its own window.
+
 Try the interface without scanning anything: `python scripts/demo.py` serves synthetic data on port 8480.
 
 ## Commands
