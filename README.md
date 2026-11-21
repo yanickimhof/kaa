@@ -28,6 +28,8 @@ Kaa maps every device on your home network, recognises what each one is, checks 
 
 Light and dark themes follow your system. The interface is available in English and French.
 
+The interface is plain HTML, CSS and JavaScript: no framework and no external request. Its motion follows the fluid interface principles Apple presented at WWDC (not affiliated with Apple): the drawer follows your pointer one to one, can be grabbed while it moves, and a flick decides where it lands. It respects reduced motion, reduced transparency and increased contrast. See [docs/DESIGN.md](docs/DESIGN.md).
+
 ## How it works
 
 <p align="center"><img src="docs/img/how-it-works.svg" width="900" alt="Discovery, identification, evaluation and scoring pipeline"></p>

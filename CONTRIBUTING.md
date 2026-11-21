@@ -10,6 +10,7 @@ python3 -m venv .venv && . .venv/bin/activate
 pip install -e ".[dev]"
 pytest -q
 python scripts/demo.py   # the interface with synthetic data, no scanning
+# add ?still to the URL (and ?theme=light or dark) to freeze animations, for screenshots
 ```
 
 ## Easiest ways to help

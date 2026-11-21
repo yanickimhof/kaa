@@ -422,7 +422,7 @@ function renderMap() {
     for (const [k, items] of [...byKind].sort((x, y) => x[0].localeCompare(y[0]))) {
       items.sort((x, y) => (x.name || "").localeCompare(y.name || ""));
       if (items.length < 3) { nodes.push(...items.map((r) => radioRow(r))); continue; }
-      const open = q ? true : grpOpen.has(k) ? grpOpen.get(k) : chip === "radio";
+      const open = q ? true : grpOpen.has(k) ? grpOpen.get(k) : true;  // names visible by default; the group row still folds them
       nodes.push(groupRow(k, items, open));
       if (open) nodes.push(...items.map((r) => radioRow(r, true)));
     }
@@ -430,13 +430,100 @@ function renderMap() {
   box.replaceChildren(...(nodes.length ? nodes : [el("div", { class: "empty" }, t("no_match_dev"))]));
 }
 
+/* ---------- drawer physics: spring, drag, momentum (no library, no external request) ---------- */
+const reduceMotion = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
+/* Spring defined like Apple's: damping ratio + response (seconds). Integrates from the live value and velocity, so it can be interrupted at any frame. */
+function spring(from, to, v0, { response = 0.32, damping = 1 }, onFrame, onDone) {
+  const w = (2 * Math.PI) / response, k = w * w, c = 2 * damping * w;
+  let x = from, v = v0, last = performance.now(), id = 0;
+  const step = (now) => {
+    let dt = Math.min(0.064, (now - last) / 1000); last = now;
+    while (dt > 0) { const h = Math.min(dt, 1 / 240); v += (-k * (x - to) - c * v) * h; x += v * h; dt -= h; }
+    if (Math.abs(x - to) < 0.3 && Math.abs(v) < 2) { onFrame(to, 0); if (onDone) onDone(); return; }
+    onFrame(x, v); id = requestAnimationFrame(step);
+  };
+  id = requestAnimationFrame(step);
+  return { cancel: () => cancelAnimationFrame(id) };
+}
+const projectMomentum = (v, rate = 0.998) => ((v / 1000) * rate) / (1 - rate);  // where a flick would come to rest (px)
+const rubberband = (over, dim, k = 0.55) => (over * dim * k) / (dim + k * Math.abs(over));  // resistance past an edge
+const DR = { x: 0, v: 0, open: false, anim: null };
+const dw = () => $("drawer").offsetWidth || 1;
+function drPaint(x) {
+  DR.x = x;
+  const p = Math.min(1, Math.max(0, 1 - x / dw()));
+  $("drawer").style.transform = `translate3d(${x}px,0,0)`;
+  $("scrim").style.opacity = p.toFixed(3);
+  document.documentElement.style.setProperty("--p", p.toFixed(3));
+}
+function drDone(open) {
+  DR.anim = null; DR.v = 0;
+  if (open) return;
+  const dr = $("drawer");
+  dr.classList.remove("vis"); dr.style.transform = ""; dr.inert = true;
+  document.documentElement.classList.remove("dr-active"); document.documentElement.style.removeProperty("--p");
+  $("scrim").style.opacity = "";
+}
+function drGo(open, v0 = 0) {
+  if (DR.anim) DR.anim.cancel();
+  if (document.documentElement.classList.contains("still")) { drPaint(open ? 0 : dw()); drDone(open); return; }  // ?still: no animation (screenshots)
+  if (reduceMotion()) { $("scrim").style.opacity = open ? "1" : "0"; if (!open) setTimeout(() => { if (!DR.open) drDone(false); }, 220); return; }
+  /* bounce only when a flick carried momentum; otherwise critically damped */
+  DR.anim = spring(DR.x, open ? 0 : dw(), v0, { response: 0.32, damping: Math.abs(v0) > 300 ? 0.8 : 1 }, (x, v) => { DR.v = v; drPaint(x); }, () => drDone(open));
+}
+function setBackgroundInert(on) { for (const s of [".bar", ".grid", ".foot"]) document.querySelector(s).inert = on; }
+function initDrawer() {
+  const dr = $("drawer");
+  let st = null, hist = [];
+  dr.addEventListener("pointerdown", (e) => {
+    if ((!DR.open && !DR.anim) || reduceMotion() || e.button > 0 || e.target.closest("input, select, textarea, button, a, label")) return;
+    const frozen = !!DR.anim;  // grabbing a moving drawer stops it where it is
+    if (frozen) { DR.anim.cancel(); DR.anim = null; }
+    st = { id: e.pointerId, x0: e.clientX, y0: e.clientY, base: DR.x, live: false, frozen };
+    hist = [[e.clientX, e.timeStamp]];
+  });
+  dr.addEventListener("pointermove", (e) => {
+    if (!st || e.pointerId !== st.id) return;
+    const dx = e.clientX - st.x0, dy = e.clientY - st.y0;
+    if (!st.live) {
+      if (Math.abs(dx) < 10 && Math.abs(dy) < 10) return;  // hysteresis
+      if (Math.abs(dy) > Math.abs(dx)) { if (st.frozen) drGo(DR.open, 0); st = null; return; }  // vertical: let it scroll
+      st.live = true; st.x0 = e.clientX; dr.setPointerCapture(e.pointerId); dr.classList.add("dragging");
+    }
+    hist.push([e.clientX, e.timeStamp]);
+    while (hist.length > 2 && e.timeStamp - hist[0][1] > 100) hist.shift();
+    const raw = st.base + (e.clientX - st.x0);  // 1:1 with the pointer, offset kept from where it was grabbed
+    drPaint(raw < 0 ? -rubberband(-raw, dw()) : raw);
+  });
+  const end = (e) => {
+    if (!st || e.pointerId !== st.id) return;
+    const s = st; st = null;
+    if (!s.live) { if (s.frozen) drGo(DR.open, DR.v); return; }
+    dr.classList.remove("dragging");
+    const [x1, t1] = hist[hist.length - 1], [x0, t0] = hist[0];
+    const v = t1 > t0 ? ((x1 - x0) / (t1 - t0)) * 1000 : 0;  // px/s at release
+    if (DR.x + projectMomentum(v) > dw() / 2) closeDrawer(v); else { DR.open = true; drGo(true, v); }
+  };
+  dr.addEventListener("pointerup", end); dr.addEventListener("pointercancel", end);
+  const bar = document.querySelector(".bar");
+  const edge = () => bar.classList.toggle("scrolled", window.scrollY > 4);
+  window.addEventListener("scroll", edge, { passive: true }); edge();
+  dr.inert = true;
+}
+
 /* ---------- drawers ---------- */
 function showDrawer(nodes) {
-  const dr = $("drawer");
-  dr.replaceChildren(el("button", { class: "close", onclick: closeDrawer, "aria-label": t("close") }, icon("x")), ...nodes.filter(Boolean));
-  dr.classList.add("on"); $("scrim").classList.add("on"); dr.setAttribute("aria-hidden", "false");
+  const dr = $("drawer"), wasOpen = DR.open;
+  dr.replaceChildren(el("button", { class: "close", onclick: () => closeDrawer(), "aria-label": t("close") }, icon("x")), ...nodes.filter(Boolean));
+  dr.setAttribute("aria-hidden", "false"); dr.inert = false;
   if (!opener) opener = document.activeElement;
-  dr.querySelector(".close").focus();
+  if (!wasOpen) {  // content refreshes while open must not replay the entrance
+    DR.open = true; dr.classList.add("on", "vis"); $("scrim").classList.add("on");
+    document.documentElement.classList.add("dr-active"); setBackgroundInert(true);
+    if (!dr.style.transform && !reduceMotion()) drPaint(dw());  // start closed, then open from the current value
+    drGo(true, 0);
+  }
+  if (!document.documentElement.classList.contains("still")) dr.querySelector(".close").focus({ preventScroll: true });  // ?still = screenshots: no focus ring
 }
 let opener = null;
 async function openDrawer(id) {
@@ -515,8 +602,13 @@ function evidenceCard(e) {
     el("div", {}, el("code", {}, JSON.stringify(e.matched))), e.reason ? el("div", {}, e.reason) : null);
 }
 async function save(id, patch) { await api(`/api/devices/${id}`, { method: "PATCH", body: JSON.stringify(patch) }); await refresh(); await openDrawer(id); }
-function closeDrawer() {
-  $("drawer").classList.remove("on"); $("scrim").classList.remove("on"); $("drawer").setAttribute("aria-hidden", "true"); openId = null;
+function closeDrawer(v0) {
+  if (!DR.open) return;
+  DR.open = false; openId = null;
+  const dr = $("drawer");
+  dr.classList.remove("on"); $("scrim").classList.remove("on"); dr.setAttribute("aria-hidden", "true");
+  setBackgroundInert(false);
+  drGo(false, typeof v0 === "number" ? v0 : 0);  // leaves the way it came: to the right
   if (opener && document.contains(opener)) opener.focus();
   opener = null;
 }
@@ -644,7 +736,8 @@ async function boot() {
   $("speed").addEventListener("click", runSpeed);
   $("ask").addEventListener("submit", submitAsk);
   $("q").addEventListener("input", renderMap);
-  $("scrim").addEventListener("click", closeDrawer);
+  initDrawer();
+  $("scrim").addEventListener("click", () => closeDrawer());
   document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeDrawer(); });
   await refresh();
   const open = /^d(\d+)$/.exec(location.hash.slice(1)); if (open) openDrawer(Number(open[1]));
