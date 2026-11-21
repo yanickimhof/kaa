@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "kaa"
-version = "0.1.0"
+version = "0.2.0"
 description = "Sovereign home network security analyzer. Maps every device, explains what is wrong, runs entirely on your machine."
 readme = "README.md"
 requires-python = ">=3.11"

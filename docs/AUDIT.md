@@ -1,4 +1,4 @@
-# Review notes (0.1.0)
+# Review notes (0.1.0, internal)
 
 A self review of code, security, performance and usability, done by the maintainers with static analysis
 (ruff with the security rules, pip-audit) and manual reading. It is **not an independent audit**. Findings
